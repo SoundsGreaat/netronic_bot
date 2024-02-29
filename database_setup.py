@@ -1,49 +1,48 @@
 import os
-
 import psycopg2
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 
-def connect():
-    try:
+class DatabaseConnection:
+    def __init__(self, db_url):
+        self.db_url = db_url
+        self.conn = None
+        self.cursor = None
+
+    def __enter__(self):
         print('Connecting to the PostgreSQL database...')
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-        return None
+        self.conn = psycopg2.connect(self.db_url)
+        self.cursor = self.conn.cursor()
+        return self.conn, self.cursor
 
-
-def close_connection(conn):
-    if conn is not None:
-        conn.close()
-        print('Database connection closed.')
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.cursor is not None:
+            self.cursor.close()
+        if self.conn is not None:
+            self.conn.close()
+            print('Database connection closed.')
 
 
 def create_orders_table():
-    conn = connect()
-    cursor = conn.cursor()
-    create_table_query = """
-    CREATE TABLE IF NOT EXISTS orders
-    (
-        order_id      SERIAL PRIMARY KEY,
-        user_id       INT  NOT NULL,
-        products      VARCHAR NOT NULL,
-        contact_name  VARCHAR NOT NULL,
-        contact_phone VARCHAR NOT NULL
-    );
-    """
-    cursor.execute(create_table_query)
-    conn.commit()
-    cursor.close()
-    close_connection(conn)
+    with DatabaseConnection(DATABASE_URL) as (conn, cursor):
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS orders
+        (
+            order_id      SERIAL PRIMARY KEY,
+            user_id       INT  NOT NULL,
+            products      VARCHAR NOT NULL,
+            contact_name  VARCHAR NOT NULL,
+            contact_phone VARCHAR NOT NULL
+        );
+        """
+        cursor.execute(create_table_query)
+        conn.commit()
 
 
 def main():
-    conn = connect()
-    if conn is not None:
-        close_connection(conn)
+    with DatabaseConnection(DATABASE_URL) as (conn, cursor):
+        pass  # You can perform operations here if needed
 
 
 if __name__ == '__main__':
