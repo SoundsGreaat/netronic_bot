@@ -4,6 +4,12 @@ import time
 from time import sleep
 from telebot import TeleBot, types
 from google_forms_filler import FormFiller
+from database_setup import DatabaseConnection, test_connection
+
+authorized_ids = {
+    'users': set(),
+    'admins': set(),
+}
 
 user_info = {
     'last_message': {},
@@ -56,6 +62,25 @@ departments_contacts = {
     },
 }
 
+
+def authorized_only(func):
+    def wrapper(data):
+        try:
+            chat_id = data.chat.id
+        except AttributeError:
+            chat_id = data.from_user.id
+
+        if chat_id in authorized_ids['users']:
+            func(data)
+        else:
+            markup = types.ReplyKeyboardRemove()
+            bot.send_message(chat_id, 'Ви не авторизовані для використання цієї функції.'
+                                      '\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.',
+                             reply_markup=markup)
+
+    return wrapper
+
+
 bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
 
 main_menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -73,14 +98,29 @@ main_menu.row(support_button)
 button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
 
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'menu'])
+@authorized_only
 def send_main_menu(message):
     with open('netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo, caption='Вітаю! Я бот-помічник <b>Netronic.</b> Що ви хочете зробити?',
                        reply_markup=main_menu, parse_mode='HTML')
 
+    if message.chat.id in authorized_ids['admins']:
+        bot.send_message(message.chat.id, 'Ви авторизовані як адміністратор.'
+                                          '\nВам доступні додаткові команди:'
+                                          '\n\n/authorize_users - оновити список авторизованих користувачів'
+                                          '\n/admin_mode - увімкнути/вимкнути режим адміністратора')
+
+
+@bot.message_handler(commands=['authorize_users'])
+@authorized_only
+def proceed_authorize_users(message):
+    authorize_ids()
+    bot.send_message(message.chat.id, 'Authorized ID\'s have been updated.')
+
 
 @bot.message_handler(func=lambda message: message.text == '🎓 База знань')
+@authorized_only
 def send_knowledge_base(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton(text='🎓 База знань', url='https://sites.google.com/skif-tech.com/netronic'
@@ -91,6 +131,7 @@ def send_knowledge_base(message):
 
 
 @bot.message_handler(func=lambda message: message.text == '💼 Бізнес-процеси')
+@authorized_only
 def send_business_processes(message):
     markup = types.InlineKeyboardMarkup()
 
@@ -102,6 +143,7 @@ def send_business_processes(message):
 
 
 @bot.message_handler(func=lambda message: message.text == '🔗 Стрічка новин')
+@authorized_only
 def send_useful_links(message):
     markup = types.InlineKeyboardMarkup()
 
@@ -113,6 +155,7 @@ def send_useful_links(message):
 
 
 @bot.message_handler(func=lambda message: message.text == '📞 Контакти')
+@authorized_only
 def send_contacts(message, edit_message=False):
     markup = types.InlineKeyboardMarkup(row_width=1)
     search_button = types.InlineKeyboardButton(text='🔍 Пошук співробітника', callback_data='search')
@@ -126,6 +169,7 @@ def send_contacts(message, edit_message=False):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'search')
+@authorized_only
 def send_search_form(call):
     cancel_form_filling(call)
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -140,6 +184,7 @@ def send_search_form(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'departments')
+@authorized_only
 def send_departments(call):
     markup = types.InlineKeyboardMarkup(row_width=2)
     buttons = []
@@ -157,6 +202,7 @@ def send_departments(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('dep_'))
+@authorized_only
 def send_department_contacts(call):
     department_index = int(call.data.split('_')[1])
     department = list(departments_contacts.keys())[department_index]
@@ -176,6 +222,7 @@ def send_department_contacts(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('sec_'))
+@authorized_only
 def send_section_contacts(call):
     department_index, section_index = map(int, call.data.split('_')[1:])
     department = list(departments_contacts.keys())[department_index]
@@ -195,6 +242,7 @@ def send_section_contacts(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('cont_'))
+@authorized_only
 def send_contact_info(call):
     department_index, section_index, contact_index = map(int, call.data.split('_')[1:])
     department = list(departments_contacts.keys())[department_index]
@@ -213,6 +261,7 @@ def send_contact_info(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'back_to_send_contacts')
+@authorized_only
 def back_to_send_contacts_menu(call):
     if user_info['search_button_pressed'].get(call.message.chat.id):
         del user_info['search_button_pressed'][call.message.chat.id]
@@ -221,6 +270,7 @@ def back_to_send_contacts_menu(call):
 
 
 @bot.message_handler(func=lambda message: message.text == '💭 Маєш питання?')
+@authorized_only
 def send_question_form(message):
     cancel_form_filling(message)
     if not user_info['callback_in_process'].get(message.chat.id):
@@ -260,6 +310,7 @@ def send_question_form(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel_form_filling')
+@authorized_only
 def cancel_form_filling(message):
     if user_info['callback_in_process'].get(message.from_user.id):
         del user_info['callback_in_process'][message.from_user.id]
@@ -273,6 +324,7 @@ def cancel_form_filling(message):
 
 @bot.message_handler(
     func=lambda message: message.text not in button_names and user_info['callback_in_process'].get(message.chat.id))
+@authorized_only
 def callback_ans(message):
     user_info['last_message'][message.chat.id] = message.text
     user_info['messages_to_delete'][message.chat.id].append(message.id)
@@ -280,6 +332,7 @@ def callback_ans(message):
 
 @bot.message_handler(
     func=lambda message: message.text not in button_names and user_info['search_button_pressed'].get(message.chat.id))
+@authorized_only
 def proceed_contact_search(message):
     found_contacts = find_contact_by_name(message.text)
     if found_contacts:
@@ -329,4 +382,23 @@ def callback(element, page_index, element_index, message):
         sleep(0.5)
 
 
-bot.infinity_polling()
+def authorize_ids():
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT telegram_user_id FROM employees')
+        cursor_result = cursor.fetchall()
+        authorized_ids['users'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
+
+        cursor.execute('''SELECT employees.telegram_user_id, employees.name
+            FROM admins
+            JOIN employees ON admins.employee_id = employees.id
+        ''')
+        cursor_result = cursor.fetchall()
+        authorized_ids['admins'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
+
+        print(f'Authorized users: {authorized_ids["users"]}'
+              f'\nAuthorized admins: {authorized_ids["admins"]}')
+
+
+if test_connection():
+    authorize_ids()
+    bot.infinity_polling()
