@@ -26,7 +26,7 @@ def test_connection():
     try:
         with DatabaseConnection():
             print('Database connection established.')
-        print('Connection test complete.')
+        print('Connection test complete.\n')
         return True
 
     except Exception as e:

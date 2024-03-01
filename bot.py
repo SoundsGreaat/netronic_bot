@@ -2,16 +2,18 @@ import os
 import threading
 import time
 from time import sleep
-from telebot import TeleBot, types
+from telebot import TeleBot, types, apihelper
 from google_forms_filler import FormFiller
 from database_setup import DatabaseConnection, test_connection
 
 authorized_ids = {
     'users': set(),
     'admins': set(),
+    'temp_users': set(),
 }
 
 user_info = {
+    'temp_authorization_in_process': {},
     'last_message': {},
     'callback_in_process': {},
     'messages_to_delete': {},
@@ -63,22 +65,33 @@ departments_contacts = {
 }
 
 
-def authorized_only(func):
-    def wrapper(data):
-        try:
-            chat_id = data.chat.id
-        except AttributeError:
-            chat_id = data.from_user.id
+def authorized_only(user_type):
+    def decorator(func):
+        def wrapper(data, *args, **kwargs):
+            try:
+                chat_id = data.chat.id
+            except AttributeError:
+                chat_id = data.from_user.id
 
-        if chat_id in authorized_ids['users']:
-            func(data)
-        else:
-            markup = types.ReplyKeyboardRemove()
-            bot.send_message(chat_id, 'Ви не авторизовані для використання цієї функції.'
-                                      '\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.',
-                             reply_markup=markup)
+            if chat_id in authorized_ids[user_type] or chat_id in authorized_ids['temp_users'] and user_type == 'users':
+                func(data, *args, **kwargs)
+            else:
+                with DatabaseConnection() as (conn, cursor):
+                    cursor.execute('''SELECT employees.telegram_username
+                                FROM admins
+                                JOIN employees ON admins.employee_id = employees.id
+                            ''')
+                    admins_list = [username[0] for username in cursor.fetchall()]
+                markup = types.ReplyKeyboardRemove()
+                print(f'Unauthorized user @{data.from_user.username} tried to access {func.__name__}\n')
+                bot.send_message(chat_id, f'Ви не авторизовані для використання цієї функції.'
+                                          f'\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.'
+                                          f'\n\nСписок адміністраторів: {", ".join(admins_list)}',
+                                 reply_markup=markup)
 
-    return wrapper
+        return wrapper
+
+    return decorator
 
 
 bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
@@ -98,8 +111,8 @@ main_menu.row(support_button)
 button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
 
 
-@bot.message_handler(commands=['start', 'menu'])
-@authorized_only
+@bot.message_handler(commands=['start', 'menu', 'help'])
+@authorized_only(user_type='users')
 def send_main_menu(message):
     with open('netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo, caption='Вітаю! Я бот-помічник <b>Netronic.</b> Що ви хочете зробити?',
@@ -108,19 +121,27 @@ def send_main_menu(message):
     if message.chat.id in authorized_ids['admins']:
         bot.send_message(message.chat.id, 'Ви авторизовані як адміністратор.'
                                           '\nВам доступні додаткові команди:'
-                                          '\n\n/authorize_users - оновити список авторизованих користувачів'
-                                          '\n/admin_mode - увімкнути/вимкнути режим адміністратора')
+                                          '\n\n/update_authorized_users - оновити список авторизованих користувачів'
+                                          '\n/admin_mode - увімкнути/вимкнути режим адміністратора'
+                                          '\n/temp_authorize - тимчасово авторизувати користувача')
 
 
-@bot.message_handler(commands=['authorize_users'])
-@authorized_only
+@bot.message_handler(commands=['update_authorized_users'])
+@authorized_only(user_type='admins')
 def proceed_authorize_users(message):
     authorize_ids()
-    bot.send_message(message.chat.id, 'Authorized ID\'s have been updated.')
+    bot.send_message(message.chat.id, 'Список авторизованих користувачів оновлено.')
+
+
+@bot.message_handler(commands=['temp_authorize'])
+@authorized_only(user_type='admins')
+def temp_authorize_user(message):
+    user_info['temp_authorization_in_process'][message.chat.id] = True
+    bot.send_message(message.chat.id, 'Надішліть контакт користувача, якого ви хочете авторизувати.')
 
 
 @bot.message_handler(func=lambda message: message.text == '🎓 База знань')
-@authorized_only
+@authorized_only(user_type='users')
 def send_knowledge_base(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton(text='🎓 База знань', url='https://sites.google.com/skif-tech.com/netronic'
@@ -131,7 +152,7 @@ def send_knowledge_base(message):
 
 
 @bot.message_handler(func=lambda message: message.text == '💼 Бізнес-процеси')
-@authorized_only
+@authorized_only(user_type='users')
 def send_business_processes(message):
     markup = types.InlineKeyboardMarkup()
 
@@ -143,7 +164,7 @@ def send_business_processes(message):
 
 
 @bot.message_handler(func=lambda message: message.text == '🔗 Стрічка новин')
-@authorized_only
+@authorized_only(user_type='users')
 def send_useful_links(message):
     markup = types.InlineKeyboardMarkup()
 
@@ -155,7 +176,7 @@ def send_useful_links(message):
 
 
 @bot.message_handler(func=lambda message: message.text == '📞 Контакти')
-@authorized_only
+@authorized_only(user_type='users')
 def send_contacts(message, edit_message=False):
     markup = types.InlineKeyboardMarkup(row_width=1)
     search_button = types.InlineKeyboardButton(text='🔍 Пошук співробітника', callback_data='search')
@@ -169,7 +190,7 @@ def send_contacts(message, edit_message=False):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'search')
-@authorized_only
+@authorized_only(user_type='users')
 def send_search_form(call):
     cancel_form_filling(call)
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -184,7 +205,7 @@ def send_search_form(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'departments')
-@authorized_only
+@authorized_only(user_type='users')
 def send_departments(call):
     markup = types.InlineKeyboardMarkup(row_width=2)
     buttons = []
@@ -202,7 +223,7 @@ def send_departments(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('dep_'))
-@authorized_only
+@authorized_only(user_type='users')
 def send_department_contacts(call):
     department_index = int(call.data.split('_')[1])
     department = list(departments_contacts.keys())[department_index]
@@ -222,7 +243,7 @@ def send_department_contacts(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('sec_'))
-@authorized_only
+@authorized_only(user_type='users')
 def send_section_contacts(call):
     department_index, section_index = map(int, call.data.split('_')[1:])
     department = list(departments_contacts.keys())[department_index]
@@ -234,15 +255,23 @@ def send_section_contacts(call):
                                          callback_data=f'cont_{department_index}_{section_index}_{index}')
         markup.add(btn)
 
-    back_button = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'dep_{department_index}')
-    markup.add(back_button)
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'dep_{department_index}')
+
+    if call.from_user.id in authorized_ids['admins']:
+        add_contact_btn = types.InlineKeyboardButton(text='📝 Додати співробітника', callback_data='add_contact')
+        markup.row(back_btn, add_contact_btn)
+    else:
+        markup.row(back_btn)
 
     bot.edit_message_text(f'Оберіть співробітника у відділі <i><b>{section}:</b></i>', call.message.chat.id,
                           call.message.message_id, reply_markup=markup, parse_mode='HTML')
 
 
+# TODO add contact adding functionality
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('cont_'))
-@authorized_only
+@authorized_only(user_type='users')
 def send_contact_info(call):
     department_index, section_index, contact_index = map(int, call.data.split('_')[1:])
     department = list(departments_contacts.keys())[department_index]
@@ -252,16 +281,25 @@ def send_contact_info(call):
     contact_phone = contact_info[1]
 
     markup = types.InlineKeyboardMarkup(row_width=1)
-    back_button = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'sec_{department_index}_{section_index}')
-    markup.add(back_button)
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'sec_{department_index}_{section_index}')
+
+    if call.from_user.id in authorized_ids['admins']:
+        edit_contact_btn = types.InlineKeyboardButton(text='📝 Редагувати контакт',
+                                                      callback_data=f'edit_{department_index}_{section_index}_{contact_index}')
+        markup.row(back_btn, edit_contact_btn)
+    else:
+        markup.row(back_btn)
 
     bot.edit_message_text(f'{contact_name} - {section}:\n{contact_phone}', call.message.chat.id,
                           call.message.message_id,
                           reply_markup=markup)
 
 
+# TODO add contact editing functionality
+
+
 @bot.callback_query_handler(func=lambda call: call.data == 'back_to_send_contacts')
-@authorized_only
+@authorized_only(user_type='users')
 def back_to_send_contacts_menu(call):
     if user_info['search_button_pressed'].get(call.message.chat.id):
         del user_info['search_button_pressed'][call.message.chat.id]
@@ -270,7 +308,7 @@ def back_to_send_contacts_menu(call):
 
 
 @bot.message_handler(func=lambda message: message.text == '💭 Маєш питання?')
-@authorized_only
+@authorized_only(user_type='users')
 def send_question_form(message):
     cancel_form_filling(message)
     if not user_info['callback_in_process'].get(message.chat.id):
@@ -310,7 +348,7 @@ def send_question_form(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel_form_filling')
-@authorized_only
+@authorized_only(user_type='users')
 def cancel_form_filling(message):
     if user_info['callback_in_process'].get(message.from_user.id):
         del user_info['callback_in_process'][message.from_user.id]
@@ -322,18 +360,41 @@ def cancel_form_filling(message):
             del user_info['messages_to_delete'][message.from_user.id]
 
 
+@bot.message_handler(func=lambda message: user_info['temp_authorization_in_process'].get(message.chat.id),
+                     content_types=['contact'])
+def temp_authorize_user_by_contact(message):
+    del user_info['temp_authorization_in_process'][message.chat.id]
+    new_user_id = message.contact.user_id
+    authorized_ids['users'].add(new_user_id)
+
+    try:
+        bot.send_message(new_user_id, f'Вас тимчасово авторизовано адміністратором @{message.from_user.username}.')
+        print(f'User {new_user_id} authorized by @{message.from_user.username} with notification.'
+              f'\nAuthorized users: {authorized_ids["users"]}\n')
+    except apihelper.ApiTelegramException:
+        print(f'User {new_user_id} authorized by @{message.from_user.username} without notification.'
+              f'\nAuthorized users: {authorized_ids["users"]}\n')
+
+    bot.send_message(message.chat.id, f'Користувача <b>{message.contact.first_name}</b> авторизовано.',
+                     parse_mode='HTML')
+
+
 @bot.message_handler(
     func=lambda message: message.text not in button_names and user_info['callback_in_process'].get(message.chat.id))
-@authorized_only
+@authorized_only(user_type='users')
 def callback_ans(message):
+    if user_info['search_button_pressed'].get(message.chat.id):
+        del user_info['search_button_pressed'][message.chat.id]
+
     user_info['last_message'][message.chat.id] = message.text
     user_info['messages_to_delete'][message.chat.id].append(message.id)
 
 
 @bot.message_handler(
     func=lambda message: message.text not in button_names and user_info['search_button_pressed'].get(message.chat.id))
-@authorized_only
+@authorized_only(user_type='users')
 def proceed_contact_search(message):
+    del user_info['search_button_pressed'][message.chat.id]
     found_contacts = find_contact_by_name(message.text)
     if found_contacts:
         for department, department_name, contact_info in found_contacts:
@@ -349,7 +410,6 @@ def proceed_contact_search(message):
         bot.delete_message(message.chat.id, user_info['messages_to_delete'][message.chat.id])
 
         del user_info['messages_to_delete'][message.chat.id]
-    del user_info['search_button_pressed'][message.chat.id]
 
 
 def find_contact_by_name(name):
@@ -395,8 +455,9 @@ def authorize_ids():
         cursor_result = cursor.fetchall()
         authorized_ids['admins'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
 
-        print(f'Authorized users: {authorized_ids["users"]}'
-              f'\nAuthorized admins: {authorized_ids["admins"]}')
+        print(f'List of authorized users updated.'
+              f'\nAuthorized users: {authorized_ids["users"]}'
+              f'\nAuthorized admins: {authorized_ids["admins"]}\n')
 
 
 if test_connection():
