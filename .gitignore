@@ -1,3 +1,5 @@
 .idea
 docker-compose.yaml
 session_name.session
+temp.py
+database/create_departments_and_employees.sql

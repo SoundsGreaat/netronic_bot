@@ -1,10 +1,12 @@
 import os
 import threading
 import time
+
 from time import sleep
 from telebot import TeleBot, types, apihelper
+
 from google_forms_filler import FormFiller
-from database_setup import DatabaseConnection, test_connection
+from database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
 
 authorized_ids = {
     'users': set(),
@@ -13,15 +15,24 @@ authorized_ids = {
 }
 
 user_info = {
+    'admin_mode': {},
     'temp_authorization_in_process': {},
-    'last_message': {},
     'callback_in_process': {},
     'messages_to_delete': {},
+    'search_button_pressed': {},
+    'forms_ans': {},
     'forms_name_message_id': {},
     'forms_timer': {},
-    'search_button_pressed': {},
 }
 
+edit_contact_data = {
+    'name': {},
+    'phone': {},
+    'position': {},
+    'username': {},
+}
+
+# TODO move links to database and add functionality to add, remove and edit them
 business_processes_buttons = {
     'Заявка на підбір персоналу':
         'https://docs.google.com/forms/d/e/1FAIpQLSdEkG-eTzL5N43MEbmZ3G1tuQdMds4Q4gAOsz5jJo7u7S9hAg/viewform',
@@ -52,18 +63,6 @@ news_feed_buttons = {
     'Корпоративний чат Netronic Community': 'example.com',
 }
 
-departments_contacts = {
-    'Адміністративний департамент': {
-        'ED': [['Іванов Іван Іванович', '+380123456789'], ['Петров Петро Петрович', '+380987654321']],
-        'PMD': [['Сидоров Сидір Сидорович', '+380123456789'], ['Кузьмін Кузьма Кузьмич', '+380987654321']],
-        'RDD': [['Микита Микитович Микитенко', '+380123456789'], ['Іваненко Іван Іванович', '+380987654321']],
-    },
-    'Департамент персоналу': {
-        'HR': [['Іванов Іван Іванович', '+380123456789'], ['Петров Петро Петрович', '+380987654321']],
-        'Recruitment': [['Сидоров Сидір Сидорович', '+380123456789'], ['Кузьмін Кузьма Кузьмич', '+380987654321']],
-    },
-}
-
 
 def authorized_only(user_type):
     def decorator(func):
@@ -81,12 +80,12 @@ def authorized_only(user_type):
                                 FROM admins
                                 JOIN employees ON admins.employee_id = employees.id
                             ''')
-                    admins_list = [username[0] for username in cursor.fetchall()]
+                    admin_list = [username[0] for username in cursor.fetchall()]
                 markup = types.ReplyKeyboardRemove()
                 print(f'Unauthorized user @{data.from_user.username} tried to access {func.__name__}\n')
                 bot.send_message(chat_id, f'Ви не авторизовані для використання цієї функції.'
                                           f'\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.'
-                                          f'\n\nСписок адміністраторів: {", ".join(admins_list)}',
+                                          f'\n\nСписок адміністраторів: {", ".join(admin_list)}',
                                  reply_markup=markup)
 
         return wrapper
@@ -114,8 +113,13 @@ button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
 @bot.message_handler(commands=['start', 'menu', 'help'])
 @authorized_only(user_type='users')
 def send_main_menu(message):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
+        user_first_name = cursor.fetchone()[0].split()[1]
+        print(user_first_name)
     with open('netronic_logo.png', 'rb') as photo:
-        bot.send_photo(message.chat.id, photo, caption='Вітаю! Я бот-помічник <b>Netronic.</b> Що ви хочете зробити?',
+        bot.send_photo(message.chat.id, photo,
+                       caption=f'Вітаю {user_first_name}! Я бот-помічник <b>Netronic.</b> Що ви хочете зробити?',
                        reply_markup=main_menu, parse_mode='HTML')
 
     if message.chat.id in authorized_ids['admins']:
@@ -129,8 +133,19 @@ def send_main_menu(message):
 @bot.message_handler(commands=['update_authorized_users'])
 @authorized_only(user_type='admins')
 def proceed_authorize_users(message):
-    authorize_ids()
-    bot.send_message(message.chat.id, 'Список авторизованих користувачів оновлено.')
+    update_authorized_users(authorized_ids)
+    bot.send_message(message.chat.id, '✔️ Список авторизованих користувачів оновлено.')
+
+
+@bot.message_handler(commands=['admin_mode'])
+@authorized_only(user_type='admins')
+def toggle_admin_mode(message):
+    if user_info['admin_mode'].get(message.chat.id):
+        del user_info['admin_mode'][message.chat.id]
+        bot.send_message(message.chat.id, '🔓 Режим адміністратора вимкнено.')
+    else:
+        bot.send_message(message.chat.id, '🔐 Режим адміністратора увімкнено.')
+        user_info['admin_mode'][message.chat.id] = True
 
 
 @bot.message_handler(commands=['temp_authorize'])
@@ -167,7 +182,6 @@ def send_business_processes(message):
 @authorized_only(user_type='users')
 def send_useful_links(message):
     markup = types.InlineKeyboardMarkup()
-
     for button_text, url in news_feed_buttons.items():
         btn = types.InlineKeyboardButton(text=button_text, url=url)
         markup.add(btn)
@@ -177,11 +191,11 @@ def send_useful_links(message):
 
 @bot.message_handler(func=lambda message: message.text == '📞 Контакти')
 @authorized_only(user_type='users')
-def send_contacts(message, edit_message=False):
+def send_contacts_menu(message, edit_message=False):
+    search_btn = types.InlineKeyboardButton(text='🔎 Пошук співробітника', callback_data='search')
+    departments_btn = types.InlineKeyboardButton(text='🏢 Департаменти', callback_data='departments')
     markup = types.InlineKeyboardMarkup(row_width=1)
-    search_button = types.InlineKeyboardButton(text='🔍 Пошук співробітника', callback_data='search')
-    departments_button = types.InlineKeyboardButton(text='🏢 Департаменти', callback_data='departments')
-    markup.add(search_button, departments_button)
+    markup.add(search_btn, departments_btn)
 
     if edit_message:
         bot.edit_message_text('Оберіть дію:', message.chat.id, message.message_id, reply_markup=markup)
@@ -193,9 +207,9 @@ def send_contacts(message, edit_message=False):
 @authorized_only(user_type='users')
 def send_search_form(call):
     cancel_form_filling(call)
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
     markup = types.InlineKeyboardMarkup(row_width=1)
-    back_button = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
-    markup.add(back_button)
+    markup.add(back_btn)
     user_info['search_button_pressed'][call.message.chat.id] = True
 
     bot.edit_message_text('Введіть ім\'я або прізвище співробітника:', call.message.chat.id, call.message.message_id,
@@ -207,16 +221,22 @@ def send_search_form(call):
 @bot.callback_query_handler(func=lambda call: call.data == 'departments')
 @authorized_only(user_type='users')
 def send_departments(call):
-    markup = types.InlineKeyboardMarkup(row_width=2)
     buttons = []
-    for index, department in enumerate(departments_contacts.keys()):
-        btn = types.InlineKeyboardButton(text=f'🏢 {department}', callback_data=f'dep_{index}')
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id, name FROM departments')
+        departments = cursor.fetchall()
+
+    for department in departments:
+        department_id = department[0]
+        department_name = department[1]
+        btn = types.InlineKeyboardButton(text=f'🏢 {department_name}', callback_data=f'dep_{department_id}')
         buttons.append(btn)
 
-    back_button = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
 
+    markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(*buttons)
-    markup.row(back_button)
+    markup.row(back_btn)
 
     bot.edit_message_text('Оберіть департамент:', call.message.chat.id, call.message.message_id,
                           reply_markup=markup)
@@ -225,77 +245,234 @@ def send_departments(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('dep_'))
 @authorized_only(user_type='users')
 def send_department_contacts(call):
-    department_index = int(call.data.split('_')[1])
-    department = list(departments_contacts.keys())[department_index]
-    markup = types.InlineKeyboardMarkup(row_width=2)
+    department_id = int(call.data.split('_')[1])
     buttons = []
 
-    for index, (section_name, contact_list) in enumerate(departments_contacts[department].items()):
-        btn = types.InlineKeyboardButton(text=f'🗄️ {section_name}', callback_data=f'sec_{department_index}_{index}')
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id, name FROM sub_departments WHERE department_id = %s', (department_id,))
+        sub_departments = cursor.fetchall()
+
+    for sub_department in sub_departments:
+        sub_department_id = sub_department[0]
+        sub_department_name = sub_department[1]
+        btn = types.InlineKeyboardButton(text=f'🗄️ {sub_department_name}',
+                                         callback_data=f'sub_dep_{department_id}_{sub_department_id}')
         buttons.append(btn)
-    back_button = types.InlineKeyboardButton(text='🔙 Назад', callback_data='departments')
 
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='departments')
+
+    markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(*buttons)
-    markup.row(back_button)
+    markup.row(back_btn)
 
-    bot.edit_message_text(f'Оберіть відділ у департаменті <i><b>{department}:</b></i>', call.message.chat.id,
+    bot.edit_message_text(f'Оберіть відділ:', call.message.chat.id,
                           call.message.message_id, reply_markup=markup, parse_mode='HTML')
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('sec_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('sub_dep_'))
 @authorized_only(user_type='users')
-def send_section_contacts(call):
-    department_index, section_index = map(int, call.data.split('_')[1:])
-    department = list(departments_contacts.keys())[department_index]
-    section = list(departments_contacts[department].keys())[section_index]
+def send_sub_departments_contacts(call):
+    department_id, sub_department_id = map(int, call.data.split('_')[2:])
     markup = types.InlineKeyboardMarkup(row_width=1)
 
-    for index, contact_info in enumerate(departments_contacts[department][section]):
-        btn = types.InlineKeyboardButton(text=f'👨‍💼 {contact_info[0]}',
-                                         callback_data=f'cont_{department_index}_{section_index}_{index}')
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id, name, gender FROM employees WHERE sub_department_id = %s', (sub_department_id,))
+        employees = cursor.fetchall()
+
+    for employee in employees:
+        employee_id = employee[0]
+        employee_name = employee[1]
+        employee_gender = employee[2]
+
+        emoji = '👨‍💼' if employee_gender == 'M' else '👩‍💼'
+        btn = types.InlineKeyboardButton(text=f'{emoji} {employee_name}',
+                                         callback_data=f'profile_{department_id}_{sub_department_id}_{employee_id}')
         markup.add(btn)
 
-    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'dep_{department_index}')
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'dep_{department_id}')
 
     if call.from_user.id in authorized_ids['admins']:
-        add_contact_btn = types.InlineKeyboardButton(text='📝 Додати співробітника', callback_data='add_contact')
+        add_contact_btn = types.InlineKeyboardButton(text='📝 Додати співробітника',
+                                                     callback_data=f'add_contact_{sub_department_id}')
         markup.row(back_btn, add_contact_btn)
     else:
         markup.row(back_btn)
 
-    bot.edit_message_text(f'Оберіть співробітника у відділі <i><b>{section}:</b></i>', call.message.chat.id,
-                          call.message.message_id, reply_markup=markup, parse_mode='HTML')
+    bot.edit_message_text(f'Оберіть співробітника:', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup)
 
 
-# TODO add contact adding functionality
+@bot.callback_query_handler(func=lambda call: call.data == 'add_contact_')
+@authorized_only(user_type='admins')
+def add_contact(call):
+    # TODO add contact adding functionality
+    pass
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('cont_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('profile_'))
 @authorized_only(user_type='users')
-def send_contact_info(call):
-    department_index, section_index, contact_index = map(int, call.data.split('_')[1:])
-    department = list(departments_contacts.keys())[department_index]
-    section = list(departments_contacts[department].keys())[section_index]
-    contact_info = departments_contacts[department][section][contact_index]
-    contact_name = contact_info[0]
-    contact_phone = contact_info[1]
-
+def send_profile(call):
+    if call.data.startswith('profile_s_'):
+        search_query, employee_id = call.data.split('_')[2:]
+        employee_id = int(employee_id)
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'bck_srch_{search_query}')
+        edit_employee_btn = types.InlineKeyboardButton(text='📝 Редагувати контакт',
+                                                       callback_data=f'edit_emp_s_{search_query}_{employee_id}')
+    else:
+        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[1:])
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад',
+                                              callback_data=f'sub_dep_{department_id}_{sub_department_id}')
+        edit_employee_btn = types.InlineKeyboardButton(text='📝 Редагувати контакт',
+                                                       callback_data=f'edit_emp_{department_id}_'
+                                                                     f'{sub_department_id}_{employee_id}')
     markup = types.InlineKeyboardMarkup(row_width=1)
-    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'sec_{department_index}_{section_index}')
 
     if call.from_user.id in authorized_ids['admins']:
-        edit_contact_btn = types.InlineKeyboardButton(text='📝 Редагувати контакт',
-                                                      callback_data=f'edit_{department_index}_{section_index}_{contact_index}')
-        markup.row(back_btn, edit_contact_btn)
+        markup.row(back_btn, edit_employee_btn)
     else:
         markup.row(back_btn)
 
-    bot.edit_message_text(f'{contact_name} - {section}:\n{contact_phone}', call.message.chat.id,
-                          call.message.message_id,
-                          reply_markup=markup)
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name, phone, position, telegram_username, gender FROM employees WHERE id = %s',
+                       (employee_id,))
+        employee_info = cursor.fetchone()
+
+    employee_name = employee_info[0]
+    employee_phone = employee_info[1]
+    employee_position = employee_info[2]
+    employee_username = employee_info[3]
+    employee_gender = employee_info[4]
+    emoji = '👨‍💼' if employee_gender == 'M' else '👩‍💼'
+    bot.edit_message_text(f'{emoji} {employee_name} - {employee_position}:\n{employee_username} ({employee_phone})',
+                          call.message.chat.id,
+                          call.message.message_id, reply_markup=markup)
 
 
-# TODO add contact editing functionality
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_emp'))
+@authorized_only(user_type='admins')
+def edit_employee(call):
+    if call.data.startswith('edit_emp_s'):
+        search_query, employee_id = call.data.split('_')[3:]
+        employee_id = int(employee_id)
+        delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити контакт',
+                                                callback_data=f'delete_s_{search_query}_{employee_id}')
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'profile_s_{search_query}_{employee_id}')
+    else:
+        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[2:])
+        delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити контакт',
+                                                callback_data=f'delete_{department_id}_{sub_department_id}_{employee_id}')
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад',
+                                              callback_data=f'profile_{department_id}_{sub_department_id}_'
+                                                            f'{employee_id}')
+
+    edit_name_btn = types.InlineKeyboardButton(text='✏️ Змінити ім\'я', callback_data=f'edit_name_{employee_id}')
+    edit_phone_btn = types.InlineKeyboardButton(text='📱 Змінити телефон', callback_data=f'edit_phone_{employee_id}')
+    edit_position_btn = types.InlineKeyboardButton(text='💼 Змінити посаду',
+                                                   callback_data=f'edit_position_{employee_id}')
+    edit_username_btn = types.InlineKeyboardButton(text='🆔 Змінити юзернейм',
+                                                   callback_data=f'edit_username_{employee_id}')
+
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.add(edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn)
+    markup.row(delete_btn)
+    markup.row(back_btn)
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name FROM employees WHERE id = %s', (employee_id,))
+        employee_name = cursor.fetchone()[0]
+
+    bot.edit_message_text(f'📝 Редагування контакту <b>{employee_name}</b>:', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_name_'))
+@authorized_only(user_type='admins')
+def edit_employee_name(call):
+    # TODO add name editing functionality
+    pass
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_phone_'))
+@authorized_only(user_type='admins')
+def edit_employee_phone(call):
+    # TODO add phone editing functionality
+    pass
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_position_'))
+@authorized_only(user_type='admins')
+def edit_employee_position(call):
+    # TODO add position editing functionality
+    pass
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_username_'))
+@authorized_only(user_type='admins')
+def edit_employee_username(call):
+    # TODO add username editing functionality
+    pass
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('delete_'))
+@authorized_only(user_type='admins')
+def delete_employee(call):
+    if call.data.startswith('delete_s'):
+        search_query, employee_id = call.data.split('_')[2:]
+        employee_id = int(employee_id)
+
+        cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення',
+                                                callback_data=f'edit_emp_s_{search_query}_{employee_id}')
+        confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення',
+                                                 callback_data=f'confirm_delete_s_{employee_id}')
+    else:
+        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[1:])
+        cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення',
+                                                callback_data=f'edit_emp_{department_id}_{sub_department_id}_{employee_id}')
+        confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення',
+                                                 callback_data=f'confirm_delete_{department_id}_{sub_department_id}_'
+                                                               f'{employee_id}')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(confirm_btn, cancel_btn)
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name FROM employees WHERE id = %s', (employee_id,))
+        employee_name = cursor.fetchone()[0]
+
+    bot.edit_message_text(f'Ви впевнені, що хочете видалити контакт <b>{employee_name}</b>?', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('bck_srch_'))
+@authorized_only(user_type='users')
+def back_to_search_results(call):
+    call.message.text = call.data.split('_')[2]
+    proceed_contact_search(call.message, edit_message=True)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('confirm_delete_'))
+@authorized_only(user_type='admins')
+def confirm_delete_employee(call):
+    if call.data.startswith('confirm_delete_s'):
+        employee_id = int(call.data.split('_')[3])
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
+    else:
+        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[2:])
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад',
+                                              callback_data=f'sub_dep_{department_id}_{sub_department_id}')
+
+    markup = types.InlineKeyboardMarkup()
+    markup.add(back_btn)
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name FROM employees WHERE id = %s', (employee_id,))
+        employee_name = cursor.fetchone()[0]
+        cursor.execute('DELETE FROM employees WHERE id = %s', (employee_id,))
+        conn.commit()
+
+    print(f'Employee {employee_name} deleted by {call.from_user.username}.\n')
+
+    bot.edit_message_text(f'✅ Контакт <b>{employee_name}</b> видалено.', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup, parse_mode='HTML')
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'back_to_send_contacts')
@@ -304,7 +481,7 @@ def back_to_send_contacts_menu(call):
     if user_info['search_button_pressed'].get(call.message.chat.id):
         del user_info['search_button_pressed'][call.message.chat.id]
 
-    send_contacts(call.message, edit_message=True)
+    send_contacts_menu(call.message, edit_message=True)
 
 
 @bot.message_handler(func=lambda message: message.text == '💭 Маєш питання?')
@@ -312,8 +489,8 @@ def back_to_send_contacts_menu(call):
 def send_question_form(message):
     cancel_form_filling(message)
     if not user_info['callback_in_process'].get(message.chat.id):
-        if user_info['last_message'].get(message.chat.id):
-            del user_info['last_message'][message.chat.id]
+        if user_info['forms_ans'].get(message.chat.id):
+            del user_info['forms_ans'][message.chat.id]
 
         user_info['messages_to_delete'][message.chat.id] = [message.id]
 
@@ -362,18 +539,20 @@ def cancel_form_filling(message):
 
 @bot.message_handler(func=lambda message: user_info['temp_authorization_in_process'].get(message.chat.id),
                      content_types=['contact'])
+@authorized_only(user_type='admins')
 def temp_authorize_user_by_contact(message):
     del user_info['temp_authorization_in_process'][message.chat.id]
     new_user_id = message.contact.user_id
-    authorized_ids['users'].add(new_user_id)
+    authorized_ids['temp_users'].add(new_user_id)
 
     try:
         bot.send_message(new_user_id, f'Вас тимчасово авторизовано адміністратором @{message.from_user.username}.')
-        print(f'User {new_user_id} authorized by @{message.from_user.username} with notification.'
-              f'\nAuthorized users: {authorized_ids["users"]}\n')
+
+        print(f'User {new_user_id} temporarily authorized by @{message.from_user.username} with notification.'
+              f'\nTemporarily authorized users: {authorized_ids["temp_users"]}\n')
     except apihelper.ApiTelegramException:
-        print(f'User {new_user_id} authorized by @{message.from_user.username} without notification.'
-              f'\nAuthorized users: {authorized_ids["users"]}\n')
+        print(f'User {new_user_id} temporarily authorized by @{message.from_user.username} without notification.'
+              f'\nTemporarily authorized users: {authorized_ids["temp_users"]}\n')
 
     bot.send_message(message.chat.id, f'Користувача <b>{message.contact.first_name}</b> авторизовано.',
                      parse_mode='HTML')
@@ -386,40 +565,59 @@ def callback_ans(message):
     if user_info['search_button_pressed'].get(message.chat.id):
         del user_info['search_button_pressed'][message.chat.id]
 
-    user_info['last_message'][message.chat.id] = message.text
+    user_info['forms_ans'][message.chat.id] = message.text
     user_info['messages_to_delete'][message.chat.id].append(message.id)
 
 
 @bot.message_handler(
     func=lambda message: message.text not in button_names and user_info['search_button_pressed'].get(message.chat.id))
 @authorized_only(user_type='users')
-def proceed_contact_search(message):
-    del user_info['search_button_pressed'][message.chat.id]
-    found_contacts = find_contact_by_name(message.text)
-    if found_contacts:
-        for department, department_name, contact_info in found_contacts:
-            bot.send_message(message.chat.id, f'{department} - {department_name}:\n'
-                                              f'{contact_info[0]}  ({contact_info[1]})')
-    else:
-        markup = types.InlineKeyboardMarkup()
-        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
-        repeat_btn = types.InlineKeyboardButton(text='🔍 Повторити спробу', callback_data='search')
-        markup.add(back_btn, repeat_btn)
-
-        bot.send_message(message.chat.id, 'Співробітник не знайдений', reply_markup=markup)
+def proceed_contact_search(message, edit_message=False):
+    if user_info['messages_to_delete'].get(message.chat.id):
         bot.delete_message(message.chat.id, user_info['messages_to_delete'][message.chat.id])
-
         del user_info['messages_to_delete'][message.chat.id]
 
+    found_contacts = find_contact_by_name(message.text)
 
-def find_contact_by_name(name):
-    found_contacts = []
-    for department, contacts in departments_contacts.items():
-        for department_name, contact_list in contacts.items():
-            for contact_info in contact_list:
-                if name.lower() in contact_info[0].lower():
-                    found_contacts.append((department, department_name, contact_info))
-    return found_contacts
+    if found_contacts:
+        markup = types.InlineKeyboardMarkup()
+
+        for employee_info in found_contacts:
+            employee_id = employee_info[0]
+            employee_name = employee_info[1]
+            employee_position = employee_info[2]
+            employee_gender = employee_info[3]
+
+            emoji = '👨‍💼' if employee_gender == 'M' else '👩‍💼'
+            btn = types.InlineKeyboardButton(text=f'{emoji} {employee_name} - {employee_position}',
+                                             callback_data=f'profile_s_{message.text}_{employee_id}')
+            markup.add(btn)
+
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='search')
+        markup.row(back_btn)
+
+        if edit_message:
+            bot.edit_message_text('🔎 Знайдені співробітники:', message.chat.id, message.message_id,
+                                  reply_markup=markup)
+        else:
+            try:
+                bot.send_message(message.chat.id, '🔎 Знайдені співробітники:', reply_markup=markup)
+            except apihelper.ApiTelegramException:
+                back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='search')
+                markup = types.InlineKeyboardMarkup()
+                markup.add(back_btn)
+                sent_message = bot.send_message(message.chat.id, '🚫 Повідомлення занадто довге для відправки.'
+                                                                 '\nСпробуйте виконати пошук знову.',
+                                                reply_markup=markup)
+                user_info['messages_to_delete'][message.chat.id] = sent_message.message_id
+
+    else:
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
+        markup = types.InlineKeyboardMarkup()
+        markup.add(back_btn)
+
+        sent_message = bot.send_message(message.chat.id, '🚫 Співробітник не знайдений', reply_markup=markup)
+        user_info['messages_to_delete'][message.chat.id] = sent_message.message_id
 
 
 def callback(element, page_index, element_index, message):
@@ -434,32 +632,19 @@ def callback(element, page_index, element_index, message):
         if time.time() - user_info['forms_timer'][message.chat.id] > 3600:
             cancel_form_filling(message)
             break
-        if user_info['last_message'].get(message.chat.id):
-            ans = user_info['last_message'][message.chat.id]
+        if user_info['forms_ans'].get(message.chat.id):
+            ans = user_info['forms_ans'][message.chat.id]
             del user_info['callback_in_process'][message.chat.id]
-            del user_info['last_message'][message.chat.id]
+            del user_info['forms_ans'][message.chat.id]
             return ans
         sleep(0.5)
 
 
-def authorize_ids():
-    with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT telegram_user_id FROM employees')
-        cursor_result = cursor.fetchall()
-        authorized_ids['users'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
-
-        cursor.execute('''SELECT employees.telegram_user_id, employees.name
-            FROM admins
-            JOIN employees ON admins.employee_id = employees.id
-        ''')
-        cursor_result = cursor.fetchall()
-        authorized_ids['admins'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
-
-        print(f'List of authorized users updated.'
-              f'\nAuthorized users: {authorized_ids["users"]}'
-              f'\nAuthorized admins: {authorized_ids["admins"]}\n')
+def main():
+    if test_connection():
+        update_authorized_users(authorized_ids)
+        bot.infinity_polling()
 
 
-if test_connection():
-    authorize_ids()
-    bot.infinity_polling()
+if __name__ == '__main__':
+    main()

@@ -16,15 +16,16 @@ CREATE TABLE employees
 (
     id                SERIAL PRIMARY KEY,
     sub_department_id INTEGER REFERENCES sub_departments (id),
-    name              VARCHAR(60) NOT NULL,
-    phone             VARCHAR(15) NOT NULL,
-    position          VARCHAR(60) NOT NULL,
-    telegram_username VARCHAR(60) NOT NULL,
-    telegram_user_id  INTEGER NOT NULL
+    name              VARCHAR(60)                          NOT NULL,
+    phone             VARCHAR(15)                          NOT NULL,
+    gender            CHAR(1) CHECK (gender IN ('M', 'F')) NOT NULL,
+    position          VARCHAR(60)                          NOT NULL,
+    telegram_username VARCHAR(60)                          NOT NULL,
+    telegram_user_id  INTEGER                              NOT NULL
 );
 
 CREATE TABLE admins
 (
-    id SERIAL PRIMARY KEY,
+    id          SERIAL PRIMARY KEY,
     employee_id INTEGER UNIQUE REFERENCES employees (id)
 );

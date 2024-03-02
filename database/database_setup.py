@@ -20,19 +20,3 @@ class DatabaseConnection:
             self.cursor.close()
         if self.conn is not None:
             self.conn.close()
-
-
-def test_connection():
-    try:
-        with DatabaseConnection():
-            print('Database connection established.')
-        print('Connection test complete.\n')
-        return True
-
-    except Exception as e:
-        print(f'Error: {e}')
-        return False
-
-
-if __name__ == "__main__":
-    test_connection()
