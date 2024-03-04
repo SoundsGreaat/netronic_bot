@@ -14,7 +14,7 @@ async def proceed_find_user_id(username):
             user = await client.get_entity(username)
             user_id = user.id
             return user_id
-    except ValueError and telethon.errors.rpcerrorlist.UsernameInvalidError:
-        pass
+    except (ValueError, telethon.errors.rpcerrorlist.UsernameInvalidError):
+        return None
     finally:
         await client.disconnect()

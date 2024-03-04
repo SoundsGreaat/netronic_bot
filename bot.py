@@ -6,6 +6,8 @@ import time
 from collections import defaultdict
 
 from time import sleep
+
+import gforms
 from telebot import TeleBot, types, apihelper
 
 from google_forms_filler import FormFiller
@@ -30,6 +32,12 @@ edit_employee_data = {
     'saved_message': {},
     'column': {},
 }
+edit_link_data = {
+    'saved_message': {},
+    'column': {},
+}
+
+add_link_data = defaultdict(dict)
 
 add_employee_data = defaultdict(dict)
 
@@ -66,7 +74,7 @@ def authorized_only(user_type):
 
 
 def callback(element, page_index, element_index, message):
-    sent_message = bot.send_message(message.chat.id, f'{element.name}')
+    sent_message = bot.send_message(message.chat.id, f'{element.name}:')
     try:
         user_data['form_messages_to_delete'][message.chat.id].append(sent_message.message_id)
     except KeyError:
@@ -174,44 +182,232 @@ def temp_authorize_user(message):
 
 @bot.message_handler(func=lambda message: message.text == '🎓 База знань')
 @authorized_only(user_type='users')
-def send_knowledge_base(message):
-    with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name, link FROM knowledge_base_links ORDER BY id')
-        knowledge_base_links = cursor.fetchall()
-    markup = types.InlineKeyboardMarkup()
-    for name, link in knowledge_base_links:
-        btn = types.InlineKeyboardButton(text=name, url=link)
-        markup.add(btn)
-    bot.send_message(message.chat.id, 'Натисніть на кнопку щоб відкрити посилання:', reply_markup=markup)
+def send_knowledge_base(message, edit_message=False):
+    send_links(message, 'knowledge_base', edit_message)
 
 
 @bot.message_handler(func=lambda message: message.text == '💼 Бізнес-процеси')
 @authorized_only(user_type='users')
-def send_business_processes(message):
+def send_business_processes(message, edit_message=False):
+    send_links(message, 'business_process', edit_message)
+
+
+def send_links(message, link_type, edit_message=False):
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name, link FROM business_process_links ORDER BY id')
-        business_process_links = cursor.fetchall()
-
+        cursor.execute('''SELECT links.id, links.name, links.link, link_type_id FROM link_types
+                            JOIN links ON link_types.id = links.link_type_id
+                            WHERE link_types.name = %s
+                            ORDER BY LEFT(links.name, 1), links.id''', (link_type,))
+        links = cursor.fetchall()
+        link_type_id = links[0][3]
     markup = types.InlineKeyboardMarkup()
-    for name, link in business_process_links:
-        btn = types.InlineKeyboardButton(text=name, url=link)
+    for link_id, link_name, link, _ in links:
+        if link.startswith('https://docs.google.com/forms') or user_data['edit_link_mode'].get(message.chat.id):
+            btn = types.InlineKeyboardButton(text=link_name, callback_data=f'open_link_{link_id}')
+        else:
+            btn = types.InlineKeyboardButton(text=link_name, url=link)
         markup.add(btn)
+    if user_data['edit_link_mode'].get(message.chat.id):
+        add_link_btn = types.InlineKeyboardButton(text='➕ Додати посилання',
+                                                  callback_data=f'add_link_{link_type_id}')
+        markup.add(add_link_btn)
+        message_text = '📝 Оберіть посилання для редагування:'
+    else:
+        message_text = '🔍 Оберіть посилання для перегляду:'
+    if edit_message:
+        bot.edit_message_text(message_text, message.chat.id, message.message_id,
+                              reply_markup=markup)
+    else:
+        bot.send_message(message.chat.id, message_text, reply_markup=markup)
 
-    bot.send_message(message.chat.id, 'Натисніть на кнопку щоб відкрити посилання:', reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('add_link_'))
+@authorized_only(user_type='admins')
+def add_link(call):
+    link_type_id = int(call.data.split('_')[2])
+    process_in_progress[call.message.chat.id] = 'add_link'
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'back_to_send_links_{link_type_id}')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    sent_message = bot.send_message(call.message.chat.id, '📝 Введіть назву нового посилання:', reply_markup=markup)
+    add_link_data[call.message.chat.id]['saved_message'] = sent_message
+    add_link_data[call.message.chat.id]['link_type_id'] = link_type_id
+
+
+@bot.message_handler(
+    func=lambda message: message.text not in button_names and process_in_progress.get(message.chat.id) == 'add_link')
+@authorized_only(user_type='admins')
+def proceed_add_link_data(message):
+    finish_function = False
+    link_type_id = add_link_data[message.chat.id]['link_type_id']
+    if not add_link_data[message.chat.id].get('name'):
+        add_link_data[message.chat.id]['name'] = message.text
+        message_text = '🔗 Введіть посилання:'
+    else:
+        if not re.match(r'^https?://.*', message.text):
+            message_text = ('🚫 Посилання введено невірно.'
+                            '\nВведіть посилання в форматі <b>http://</b> або <b>https://:</b>')
+        else:
+            with DatabaseConnection() as (conn, cursor):
+                cursor.execute('INSERT INTO links (name, link, link_type_id) VALUES (%s, %s, %s) RETURNING id',
+                               (add_link_data[message.chat.id]['name'], message.text, link_type_id))
+                link_id = cursor.fetchone()[0]
+                conn.commit()
+            message_text = f'✅ Посилання <b>{add_link_data[message.chat.id]["name"]}</b> успішно додано.'
+            log_text = f'Link {link_id} added by @{message.from_user.username}.\n'
+            print(log_text)
+            finish_function = True
+
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'back_to_send_links_{link_type_id}')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn) if not finish_function else None
+    saved_message = add_link_data[message.chat.id]['saved_message']
+    bot.delete_message(message.chat.id, saved_message.message_id)
+    bot.delete_message(message.chat.id, message.message_id)
+    sent_message = bot.send_message(message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
+    add_link_data[message.chat.id]['saved_message'] = sent_message
+    if finish_function:
+        del add_link_data[message.chat.id]
+        del process_in_progress[message.chat.id]
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('open_link_'))
+@authorized_only(user_type='users')
+def send_form(call):
+    link_id = int(call.data.split('_')[2])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name, link, link_type_id FROM links WHERE id = %s', (link_id,))
+        link = cursor.fetchone()
+    if not user_data['edit_link_mode'].get(call.message.chat.id):
+        form_link = link[1]
+        send_question_form(call.message, form_link)
+    else:
+        link_name = link[0]
+        link_type_id = link[2]
+        edit_link_name_btn = types.InlineKeyboardButton(text='📝 Редагувати назву',
+                                                        callback_data=f'edit_link_name_{link_id}')
+        edit_link_url_btn = types.InlineKeyboardButton(text='🔗 Редагувати посилання',
+                                                       callback_data=f'edit_link_url_{link_id}')
+        delete_link_btn = types.InlineKeyboardButton(text='🗑️ Видалити посилання',
+                                                     callback_data=f'delete_link_{link_id}')
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'back_to_send_links_{link_type_id}')
+
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(edit_link_name_btn, edit_link_url_btn, delete_link_btn, back_btn)
+        bot.edit_message_text(f'❗ Ви у режимі редагування посилань.'
+                              f'\nОберіть дію для посилання <b>{link_name}</b>:',
+                              call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_link_'))
+@authorized_only(user_type='admins')
+def edit_link(call):
+    operation, link_id = call.data.split('_')[2:]
+    link_id = int(link_id)
+    process_in_progress[call.message.chat.id] = 'edit_link'
+    user_data['edit_link_mode'][call.message.chat.id] = True
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name FROM links WHERE id = %s', (link_id,))
+        link_info = cursor.fetchone()
+    link_name = link_info[0]
+    back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'open_link_{link_id}')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(back_btn)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    if operation == 'name':
+        edit_link_data['column'][call.message.chat.id] = ('name', link_id)
+        message_text = f'📝 Введіть нову назву для посилання <b>{link_name}</b>:'
+    else:
+        edit_link_data['column'][call.message.chat.id] = ('link', link_id)
+        message_text = f'🔗 Введіть нове посилання для <b>{link_name}</b>:'
+    sent_message = bot.send_message(call.message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
+    edit_link_data['saved_message'][call.message.chat.id] = sent_message
+
+
+@bot.message_handler(
+    func=lambda message: message.text not in button_names and process_in_progress.get(message.chat.id) == 'edit_link')
+@authorized_only(user_type='admins')
+def proceed_edit_link_data(message):
+    column, link_id = edit_link_data['column'][message.chat.id]
+
+    bot.delete_message(message.chat.id, edit_link_data['saved_message'][message.chat.id].message_id)
+    bot.delete_message(message.chat.id, message.message_id)
+
+    if column == 'link':
+        if not re.match(r'^https?://.*', message.text):
+            message_text = ('🚫 Посилання введено невірно.'
+                            '\nВведіть посилання в форматі <b>http://</b> або <b>https://:</b>')
+            back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'open_link_{link_id}')
+            markup = types.InlineKeyboardMarkup()
+            markup.add(back_btn)
+            sent_message = bot.send_message(message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
+            edit_link_data['saved_message'][message.chat.id] = sent_message
+            return
+        else:
+            message_text = f'✅ Посилання змінено на <b>{message.text}</b>.'
+    else:
+        message_text = f'✅ Назву посилання змінено на <b>{message.text}</b>.'
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute(f'UPDATE links SET {column} = %s WHERE id = %s', (message.text, link_id))
+        conn.commit()
+
+    bot.send_message(message.chat.id, message_text, parse_mode='HTML')
+    del process_in_progress[message.chat.id]
+    del edit_link_data['column'][message.chat.id]
+    del edit_link_data['saved_message'][message.chat.id]
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('delete_link_'))
+@authorized_only(user_type='admins')
+def delete_link_confirmation(call):
+    link_id = int(call.data.split('_')[2])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name FROM links WHERE id = %s', (link_id,))
+        link_info = cursor.fetchone()
+    link_name = link_info[0]
+    back_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data=f'open_link_{link_id}')
+    confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення',
+                                             callback_data=f'confirm_delete_link_{link_id}')
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(confirm_btn, back_btn)
+    bot.edit_message_text(f'Ви впевнені, що хочете видалити посилання <b>{link_name}</b>?', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('confirm_delete_link_'))
+@authorized_only(user_type='admins')
+def delete_link(call):
+    link_id = int(call.data.split('_')[3])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name FROM links WHERE id = %s', (link_id,))
+        link_info = cursor.fetchone()
+        cursor.execute('DELETE FROM links WHERE id = %s', (link_id,))
+        conn.commit()
+    link_name = link_info[0]
+    bot.edit_message_text(f'✅ Посилання <b>{link_name}</b> успішно видалено.',
+                          call.message.chat.id, call.message.message_id, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('back_to_send_links_'))
+@authorized_only(user_type='admins')
+def back_to_send_links(call):
+    if process_in_progress.get(call.message.chat.id) == 'add_link':
+        del process_in_progress[call.message.chat.id]
+        del add_link_data[call.message.chat.id]
+
+    link_type_id = int(call.data.split('_')[4])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name FROM link_types WHERE id = %s', (link_type_id,))
+        link_type_name = cursor.fetchone()[0]
+        send_links(call.message, link_type_name, edit_message=True)
 
 
 @bot.message_handler(func=lambda message: message.text == '🔗 Стрічка новин')
 @authorized_only(user_type='users')
-def send_useful_links(message):
-    with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name, link FROM news_feed_links ORDER BY id')
-        news_feed_links = cursor.fetchall()
-    markup = types.InlineKeyboardMarkup()
-    for name, link in news_feed_links:
-        btn = types.InlineKeyboardButton(text=name, url=link)
-        markup.add(btn)
-
-    bot.send_message(message.chat.id, 'Натисніть на кнопку щоб відкрити посилання:', reply_markup=markup)
+def send_useful_links(message, edit_message=False):
+    send_links(message, 'news_feed', edit_message)
 
 
 @bot.message_handler(func=lambda message: message.text == '📞 Контакти')
@@ -315,7 +511,7 @@ def send_sub_departments_contacts(call):
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'dep_{department_id}')
 
     if call.from_user.id in authorized_ids['admins']:
-        add_employee_btn = types.InlineKeyboardButton(text='📝 Додати співробітника',
+        add_employee_btn = types.InlineKeyboardButton(text='➕ Додати співробітника',
                                                       callback_data=f'add_employee_{department_id}_{sub_department_id}')
         markup.row(add_employee_btn)
 
@@ -348,7 +544,8 @@ def add_employee(call):
     add_employee_data[call.message.chat.id]['saved_message'] = sent_massage
 
 
-@bot.message_handler(func=lambda message: process_in_progress.get(message.chat.id) == 'add_employee')
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'add_employee')
 @authorized_only(user_type='admins')
 def proceed_add_employee_data(message):
     finish_function = False
@@ -388,12 +585,17 @@ def proceed_add_employee_data(message):
         if add_employee_data[message.chat.id]['telegram_user_id'] is not None:
             bot.delete_message(message.chat.id, searching_message.message_id)
         else:
-            add_employee_data[message.chat.id]['saved_message'] = bot.edit_message_text(
+            sent_message = bot.edit_message_text(
                 '🚫 Користувач не знайдений. Перевірте правильність введеного юзернейму та спробуйте ще раз.',
                 message.chat.id, searching_message.message_id)
+            saved_message = add_employee_data[message.chat.id]['saved_message']
+            bot.delete_message(message.chat.id, saved_message.message_id)
+            bot.delete_message(message.chat.id, message.message_id)
+            add_employee_data[message.chat.id]['saved_message'] = sent_message
             return
 
         with DatabaseConnection() as (conn, cursor):
+            print(add_employee_data[message.chat.id])
             cursor.execute(
                 'INSERT INTO employees (name, phone, position, telegram_username, sub_department_id, telegram_user_id) '
                 'VALUES (%s, %s, %s, %s, %s, %s) RETURNING id',
@@ -416,9 +618,10 @@ def proceed_add_employee_data(message):
     markup = types.InlineKeyboardMarkup()
     markup.add(cancel_btn) if not finish_function else None
     saved_message = add_employee_data[message.chat.id]['saved_message']
+    bot.delete_message(message.chat.id, saved_message.message_id)
     bot.delete_message(message.chat.id, message.message_id)
-    bot.edit_message_text(message_text, message.chat.id, saved_message.message_id, reply_markup=markup,
-                          parse_mode='HTML')
+    sent_message = bot.send_message(message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
+    add_employee_data[message.chat.id]['saved_message'] = sent_message
     if finish_function:
         del add_employee_data[message.chat.id]
         del process_in_progress[message.chat.id]
@@ -482,7 +685,7 @@ def send_profile(call, call_data=None):
                     f'\n📞 Телефон: <b>{employee_phone}</b>'
                     f'\n🆔 Юзернейм: <b>{employee_username}</b>')
     if call_data:
-        bot.send_message(chat_id, message_text, reply_markup=markup)
+        bot.send_message(chat_id, message_text, reply_markup=markup, parse_mode='HTML')
     else:
         bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=markup, parse_mode='HTML')
 
@@ -611,11 +814,10 @@ def edit_employee_data_ans(message):
         message_text = f'✅ Юзернейм контакту змінено на <b>{new_value}</b>.'
         log_text = f'Employee {employee_id} username changed to {new_value} by {message.from_user.username}.\n'
 
-        print(f'Employee {employee_id} username changed to {new_value} by {message.from_user.username}.\n')
-
     print(log_text)
 
     saved_message = edit_employee_data['saved_message'][message.chat.id]
+    bot.delete_message(message.chat.id, message.message_id)
     bot.delete_message(message.chat.id, saved_message.message_id)
     bot.send_message(message.chat.id, message_text, parse_mode='HTML')
     bot.send_message(saved_message.chat.id, f'📝 Редагування контакту <b>{employee_name}</b>:',
@@ -644,7 +846,7 @@ def delete_employee(call):
 
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data=cancel_btn_callback)
     confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення', callback_data=confirm_btn_callback)
-    markup = types.InlineKeyboardMarkup()
+    markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(confirm_btn, cancel_btn)
 
     with DatabaseConnection() as (conn, cursor):
@@ -706,7 +908,16 @@ def send_question_form(message, form_url, delete_previous_message=False):
     if process_in_progress.get(message.chat.id) == 'question_form':
         delete_messages(message.chat.id, 'form_messages_to_delete')
     process_in_progress[message.chat.id] = 'question_form'
-    gform = FormFiller(form_url)
+    try:
+        gform = FormFiller(form_url)
+    except gforms.errors.SigninRequired:
+        link_btn = types.InlineKeyboardButton(text='🔗 Посилання на форму', url=form_url)
+        markup = types.InlineKeyboardMarkup()
+        markup.add(link_btn)
+        bot.send_message(message.chat.id, '🚫 Помилка: форма вимагає авторизації.'
+                                          '\nНатисніть кнопку нижче щоб перейти за посиланням.',
+                         reply_markup=markup)
+        return
 
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_form_filling')
@@ -715,9 +926,9 @@ def send_question_form(message, form_url, delete_previous_message=False):
     sent_message = bot.send_message(message.chat.id,
                                     f'{gform.name()}\n\n{gform.description() if gform.description() else ""}',
                                     reply_markup=markup)
-    user_data['form_messages_to_delete'][message.chat.id] = [message.id]
+    user_data['form_messages_to_delete'][message.chat.id] = [sent_message.message_id]
     if delete_previous_message:
-        user_data['form_messages_to_delete'][message.chat.id].append(sent_message.message_id)
+        user_data['form_messages_to_delete'][message.chat.id].append(message.message_id)
 
     def get_answer():
         try:
@@ -727,7 +938,7 @@ def send_question_form(message, form_url, delete_previous_message=False):
             )
             bot.edit_message_text(sent_message.text, sent_message.chat.id, sent_message.message_id)
             bot.send_message(sent_message.chat.id,
-                             'Дякую за заповнення форми! Ваше питання буде розглянуто найближчим часом.')
+                             '✅ Дякую за заповнення форми! Ваше питання буде розглянуто найближчим часом.')
             del user_data['form_messages_to_delete'][message.chat.id]
         except ValueError:
             pass
@@ -801,7 +1012,6 @@ def proceed_contact_search(message, edit_message=False):
 
             formatted_name = employee_name.split()
             formatted_name = f'{formatted_name[0]} {formatted_name[1][0]}. {formatted_name[2][0]}'
-            print(formatted_name)
             btn = types.InlineKeyboardButton(text=f'👨‍💻 {formatted_name} - {employee_position}',
                                              callback_data=f'profile_s_{message.text}_{employee_id}')
             markup.add(btn)
