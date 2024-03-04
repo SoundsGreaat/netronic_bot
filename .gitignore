@@ -1,5 +1,4 @@
-.idea
-docker-compose.yaml
-session_name.session
-temp.py
-database/create_departments_and_employees.sql
+/.idea
+/docker-compose.yaml
+/database/create_departments_and_employees.sql
+/find_user_id.session

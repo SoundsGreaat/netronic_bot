@@ -1,12 +1,16 @@
 import os
+import re
 import threading
+import asyncio
 import time
+from collections import defaultdict
 
 from time import sleep
 from telebot import TeleBot, types, apihelper
 
 from google_forms_filler import FormFiller
 from database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
+from telegram_user_id_search import proceed_find_user_id
 
 authorized_ids = {
     'users': set(),
@@ -15,7 +19,7 @@ authorized_ids = {
 }
 
 user_data = {
-    'admin_mode': {},
+    'edit_link_mode': {},
     'messages_to_delete': {},
     'form_messages_to_delete': {},
     'forms_ans': {},
@@ -27,9 +31,7 @@ edit_employee_data = {
     'column': {},
 }
 
-add_employee_data = {
-    'column': {},
-}
+add_employee_data = defaultdict(dict)
 
 process_in_progress = {}
 
@@ -65,7 +67,10 @@ def authorized_only(user_type):
 
 def callback(element, page_index, element_index, message):
     sent_message = bot.send_message(message.chat.id, f'{element.name}')
-    user_data['form_messages_to_delete'][message.chat.id].append(sent_message.message_id)
+    try:
+        user_data['form_messages_to_delete'][message.chat.id].append(sent_message.message_id)
+    except KeyError:
+        pass
     process_in_progress[message.chat.id] = 'question_form'
     user_data['forms_timer'][message.chat.id] = time.time()
 
@@ -73,7 +78,10 @@ def callback(element, page_index, element_index, message):
         if (process_in_progress.get(message.chat.id) != 'question_form' or
                 time.time() - user_data['forms_timer'][message.chat.id] > 3600):
             delete_messages(message.chat.id, 'form_messages_to_delete')
-            del user_data['forms_timer'][message.chat.id]
+            try:
+                del user_data['forms_timer'][message.chat.id]
+            except KeyError:
+                pass
             break
         if user_data['forms_ans'].get(message.chat.id):
             ans = user_data['forms_ans'][message.chat.id]
@@ -87,11 +95,17 @@ def callback(element, page_index, element_index, message):
 def delete_messages(chat_id, dict_key='messages_to_delete'):
     if user_data[dict_key].get(chat_id):
         if isinstance(user_data[dict_key][chat_id], list):
-            for message_id in user_data[dict_key][chat_id]:
-                bot.delete_message(chat_id, message_id)
+            try:
+                for message_id in user_data[dict_key][chat_id]:
+                    bot.delete_message(chat_id, message_id)
+            except apihelper.ApiException:
+                pass
         else:
             bot.delete_message(chat_id, user_data[dict_key][chat_id])
-        del user_data[dict_key][chat_id]
+        try:
+            del user_data[dict_key][chat_id]
+        except KeyError:
+            pass
 
 
 bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
@@ -121,14 +135,15 @@ def send_main_menu(message):
             employee_name[0].split()) == 3 else ''
     with open('netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
-                       caption=f'Вітаю{user_first_name}! Я бот-помічник <b>Netronic.</b> Що ви хочете зробити?',
+                       caption=f'👋 Вітаю<b>{user_first_name}</b>! Я бот-помічник <b>Netronic</b> 🌍'
+                               f'\nЩо ви хочете зробити?',
                        reply_markup=main_menu, parse_mode='HTML')
 
     if message.chat.id in authorized_ids['admins']:
-        bot.send_message(message.chat.id, 'Ви авторизовані як адміністратор.'
+        bot.send_message(message.chat.id, '🔐 Ви авторизовані як адміністратор.'
                                           '\nВам доступні додаткові команди:'
                                           '\n\n/update_authorized_users - оновити список авторизованих користувачів'
-                                          '\n/admin_mode - увімкнути/вимкнути режим адміністратора'
+                                          '\n/edit_link_mode - увімкнути/вимкнути режим редагування посилань'
                                           '\n/temp_authorize - тимчасово авторизувати користувача')
 
 
@@ -139,15 +154,15 @@ def proceed_authorize_users(message):
     bot.send_message(message.chat.id, '✔️ Список авторизованих користувачів оновлено.')
 
 
-@bot.message_handler(commands=['admin_mode'])
+@bot.message_handler(commands=['edit_link_mode'])
 @authorized_only(user_type='admins')
 def toggle_admin_mode(message):
-    if user_data['admin_mode'].get(message.chat.id):
-        del user_data['admin_mode'][message.chat.id]
-        bot.send_message(message.chat.id, '🔓 Режим адміністратора вимкнено.')
+    if user_data['edit_link_mode'].get(message.chat.id):
+        del user_data['edit_link_mode'][message.chat.id]
+        bot.send_message(message.chat.id, '🔓 Режим редагування посилань вимкнено.')
     else:
-        bot.send_message(message.chat.id, '🔐 Режим адміністратора увімкнено.')
-        user_data['admin_mode'][message.chat.id] = True
+        bot.send_message(message.chat.id, '🔐 Режим редагування посилань увімкнено.')
+        user_data['edit_link_mode'][message.chat.id] = True
 
 
 @bot.message_handler(commands=['temp_authorize'])
@@ -244,7 +259,7 @@ def send_departments(call):
 
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
 
-    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(*buttons)
     markup.row(back_btn)
 
@@ -286,42 +301,139 @@ def send_sub_departments_contacts(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT id, name, gender FROM employees WHERE sub_department_id = %s', (sub_department_id,))
+        cursor.execute('SELECT id, name FROM employees WHERE sub_department_id = %s', (sub_department_id,))
         employees = cursor.fetchall()
 
     for employee in employees:
         employee_id = employee[0]
         employee_name = employee[1]
-        employee_gender = employee[2]
 
-        emoji = '👨‍💼' if employee_gender == 'M' else '👩‍💼'
-        btn = types.InlineKeyboardButton(text=f'{emoji} {employee_name}',
+        btn = types.InlineKeyboardButton(text=f'👨‍💻 {employee_name}',
                                          callback_data=f'profile_{department_id}_{sub_department_id}_{employee_id}')
         markup.add(btn)
 
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'dep_{department_id}')
 
     if call.from_user.id in authorized_ids['admins']:
-        add_contact_btn = types.InlineKeyboardButton(text='📝 Додати співробітника',
-                                                     callback_data=f'add_contact_{sub_department_id}')
-        markup.row(back_btn, add_contact_btn)
-    else:
-        markup.row(back_btn)
+        add_employee_btn = types.InlineKeyboardButton(text='📝 Додати співробітника',
+                                                      callback_data=f'add_employee_{department_id}_{sub_department_id}')
+        markup.row(add_employee_btn)
+
+    markup.row(back_btn)
 
     bot.edit_message_text(f'Оберіть співробітника:', call.message.chat.id,
                           call.message.message_id, reply_markup=markup)
 
+    if process_in_progress.get(call.message.chat.id) == 'add_employee':
+        del process_in_progress[call.message.chat.id]
+    if add_employee_data.get(call.message.chat.id):
+        del add_employee_data[call.message.chat.id]
 
-@bot.callback_query_handler(func=lambda call: call.data == 'add_contact_')
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('add_employee_'))
 @authorized_only(user_type='admins')
 def add_employee(call):
+    department_id, sub_department_id = map(int, call.data.split('_')[2:])
     process_in_progress[call.message.chat.id] = 'add_employee'
-    # TODO finish this function
+    if add_employee_data.get(call.message.chat.id):
+        del add_employee_data[call.message.chat.id]
+    add_employee_data[call.message.chat.id]['department_id'] = department_id
+    add_employee_data[call.message.chat.id]['sub_department_id'] = sub_department_id
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
+                                            callback_data=f'sub_dep_{department_id}_{sub_department_id}')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    sent_massage = bot.send_message(call.message.chat.id, '👤 Введіть ПІБ нового співробітника:', reply_markup=markup)
+    add_employee_data[call.message.chat.id]['saved_message'] = sent_massage
+
+
+@bot.message_handler(func=lambda message: process_in_progress.get(message.chat.id) == 'add_employee')
+@authorized_only(user_type='admins')
+def proceed_add_employee_data(message):
+    finish_function = False
+    department_id = add_employee_data[message.chat.id]['department_id']
+    sub_department_id = add_employee_data[message.chat.id]['sub_department_id']
+    if not add_employee_data[message.chat.id].get('name'):
+        if re.match(r'^[А-ЯІЇЄҐа-яіїєґ\'\s]+$', message.text):
+            add_employee_data[message.chat.id]['name'] = message.text
+            message_text = '📞 Введіть номер телефону нового співробітника:'
+        else:
+            message_text = '🚫 ПІБ введено невірно.\nВведіть ПІБ українською мовою без цифр та спецсимволів:'
+
+    elif not add_employee_data[message.chat.id].get('phone'):
+        if re.match(r'^\+?3?8?(0\d{9})$', message.text):
+            if re.match(r'^(0\d{9})$', message.text):
+                add_employee_data[message.chat.id]['phone'] = f'+38{message.text}'
+            else:
+                add_employee_data[message.chat.id]['phone'] = message.text
+            message_text = '💼 Введіть посаду нового співробітника:'
+        else:
+            message_text = ('🚫 Номер телефону введено невірно.'
+                            '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+
+    elif not add_employee_data[message.chat.id].get('position'):
+        add_employee_data[message.chat.id]['position'] = message.text
+        message_text = '🆔 Введіть юзернейм нового співробітника:'
+
+    else:
+        if message.text.startswith('@'):
+            add_employee_data[message.chat.id]['telegram_username'] = message.text
+        else:
+            add_employee_data[message.chat.id]['telegram_username'] = f'@{message.text}'
+
+        searching_message = bot.send_message(message.chat.id, '🔄 Пошук користувача в Telegram...')
+        add_employee_data[message.chat.id]['telegram_user_id'] = asyncio.run(
+            proceed_find_user_id(add_employee_data[message.chat.id]['telegram_username']))
+        if add_employee_data[message.chat.id]['telegram_user_id'] is not None:
+            bot.delete_message(message.chat.id, searching_message.message_id)
+        else:
+            add_employee_data[message.chat.id]['saved_message'] = bot.edit_message_text(
+                '🚫 Користувач не знайдений. Перевірте правильність введеного юзернейму та спробуйте ще раз.',
+                message.chat.id, searching_message.message_id)
+            return
+
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute(
+                'INSERT INTO employees (name, phone, position, telegram_username, sub_department_id, telegram_user_id) '
+                'VALUES (%s, %s, %s, %s, %s, %s) RETURNING id',
+                (add_employee_data[message.chat.id]['name'],
+                 add_employee_data[message.chat.id]['phone'],
+                 add_employee_data[message.chat.id]['position'],
+                 add_employee_data[message.chat.id]['telegram_username'],
+                 int(add_employee_data[message.chat.id]['sub_department_id']),
+                 add_employee_data[message.chat.id]['telegram_user_id']))
+            employee_id = cursor.fetchone()[0]
+            conn.commit()
+            message_text = f'✅ Співробітник <b>{add_employee_data[message.chat.id]["name"]}</b> доданий до бази даних.'
+            update_authorized_users(authorized_ids)
+            finish_function = True
+            log_text = f'Employee {employee_id} added by @{message.from_user.username}.\n'
+            print(log_text)
+
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
+                                            callback_data=f'sub_dep_{department_id}_{sub_department_id}')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn) if not finish_function else None
+    saved_message = add_employee_data[message.chat.id]['saved_message']
+    bot.delete_message(message.chat.id, message.message_id)
+    bot.edit_message_text(message_text, message.chat.id, saved_message.message_id, reply_markup=markup,
+                          parse_mode='HTML')
+    if finish_function:
+        del add_employee_data[message.chat.id]
+        del process_in_progress[message.chat.id]
+        send_profile(message, call_data=f'profile_{department_id}_{sub_department_id}_{employee_id}')
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('profile_'))
 @authorized_only(user_type='users')
-def send_profile(call):
+def send_profile(call, call_data=None):
+    if call_data:
+        chat_id = call.chat.id
+        call.data = call_data
+    else:
+        chat_id = call.message.chat.id
+
     if call.data.startswith('profile_s_'):
         search_query, employee_id = call.data.split('_')[2:]
         employee_id = int(employee_id)
@@ -335,27 +447,44 @@ def send_profile(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
 
-    if call.from_user.id in authorized_ids['admins']:
+    if chat_id in authorized_ids['admins']:
         edit_employee_btn = types.InlineKeyboardButton(text='📝 Редагувати контакт',
                                                        callback_data=edit_employee_btn_callback)
-        markup.row(back_btn, edit_employee_btn)
-    else:
-        markup.row(back_btn)
+        markup.row(edit_employee_btn)
+
+    markup.row(back_btn)
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name, phone, position, telegram_username, gender FROM employees WHERE id = %s',
-                       (employee_id,))
+        cursor.execute('''SELECT emp.name,
+                                departments.name     AS department,
+                                sub_departments.name AS sub_department,
+                                emp.position,
+                                emp.phone,
+                                emp.telegram_username
+                        FROM employees as emp
+                        JOIN sub_departments ON emp.sub_department_id = sub_departments.id
+                        JOIN departments ON sub_departments.department_id = departments.id
+                        WHERE emp.id = %s
+                ''', (employee_id,))
         employee_info = cursor.fetchone()
 
     employee_name = employee_info[0]
-    employee_phone = employee_info[1]
-    employee_position = employee_info[2]
-    employee_username = employee_info[3]
-    employee_gender = employee_info[4]
-    emoji = '👨‍💼' if employee_gender == 'M' else '👩‍💼'
-    bot.edit_message_text(f'{emoji} {employee_name} - {employee_position}:\n{employee_username} ({employee_phone})',
-                          call.message.chat.id,
-                          call.message.message_id, reply_markup=markup)
+    employee_department = employee_info[1]
+    employee_sub_department = employee_info[2]
+    employee_position = employee_info[3]
+    employee_phone = employee_info[4]
+    employee_username = employee_info[5]
+
+    message_text = (f'👨‍💻 <b>{employee_name}</b>'
+                    f'\n\n🏢 Департамент: <b>{employee_department}</b>'
+                    f'\n🗄️ Відділ: <b>{employee_sub_department}</b>'
+                    f'\n💼 Посада: <b>{employee_position}</b>'
+                    f'\n📞 Телефон: <b>{employee_phone}</b>'
+                    f'\n🆔 Юзернейм: <b>{employee_username}</b>')
+    if call_data:
+        bot.send_message(chat_id, message_text, reply_markup=markup)
+    else:
+        bot.edit_message_text(message_text, chat_id, call.message.message_id, reply_markup=markup, parse_mode='HTML')
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('bck_srch_'))
@@ -388,7 +517,7 @@ def edit_employee(call):
         back_btn_callback = f'profile_{department_id}_{sub_department_id}_{employee_id}'
 
     edit_name_btn = types.InlineKeyboardButton(text='✏️ Змінити ім\'я', callback_data=edit_name_btn_callback)
-    edit_phone_btn = types.InlineKeyboardButton(text='📱 Змінити телефон', callback_data=edit_phone_btn_callback)
+    edit_phone_btn = types.InlineKeyboardButton(text='📞 Змінити телефон', callback_data=edit_phone_btn_callback)
     edit_position_btn = types.InlineKeyboardButton(text='💼 Змінити посаду', callback_data=edit_position_btn_callback)
     edit_username_btn = types.InlineKeyboardButton(text='🆔 Змінити юзернейм', callback_data=edit_username_btn_callback)
     delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити контакт', callback_data=delete_btn_callback)
@@ -437,7 +566,7 @@ def proceed_edit_employee(call):
         message_text = f'✏️ Введіть нове ім\'я для контакту <b>{employee_name}</b>:'
     elif call.data.startswith('e_phone'):
         edit_employee_data['column'][call.from_user.id] = ('phone', employee_id)
-        message_text = f'📱 Введіть новий телефон для контакту <b>{employee_name}</b>:'
+        message_text = f'📞 Введіть новий телефон для контакту <b>{employee_name}</b>:'
     elif call.data.startswith('e_pos'):
         edit_employee_data['column'][call.from_user.id] = ('position', employee_id)
         message_text = f'💼 Введіть нову посаду для контакту <b>{employee_name}</b>:'
@@ -445,7 +574,7 @@ def proceed_edit_employee(call):
         edit_employee_data['column'][call.from_user.id] = ('telegram_username', employee_id)
         message_text = f'🆔 Введіть новий юзернейм для контакту <b>{employee_name}</b>:'
 
-    back_btn = types.InlineKeyboardButton(text='❌ Відмінити', callback_data=back_btn_callback)
+    back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=back_btn_callback)
     markup = types.InlineKeyboardMarkup()
     markup.add(back_btn)
 
@@ -566,20 +695,29 @@ def back_to_send_contacts_menu(call):
 
 @bot.message_handler(func=lambda message: message.text == '💭 Маєш питання?')
 @authorized_only(user_type='users')
-def send_question_form(message):
-    process_in_progress[message.chat.id] = 'question_form'
+def send_support_form(message):
+    send_question_form(message,
+                       'https://docs.google.com/forms/d/e/1FAIpQLSfzamHCZtyBu2FDI3dYlV8PZw46ON2qzhTGrIRqA9eFAiI86Q/'
+                       'viewform',
+                       delete_previous_message=True)
 
-    form_url = 'https://docs.google.com/forms/d/e/1FAIpQLSfzamHCZtyBu2FDI3dYlV8PZw46ON2qzhTGrIRqA9eFAiI86Q/viewform'
+
+def send_question_form(message, form_url, delete_previous_message=False):
+    if process_in_progress.get(message.chat.id) == 'question_form':
+        delete_messages(message.chat.id, 'form_messages_to_delete')
+    process_in_progress[message.chat.id] = 'question_form'
     gform = FormFiller(form_url)
 
     markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton(text='❌ Відмінити', callback_data='cancel_form_filling')
+    btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_form_filling')
     markup.add(btn)
 
     sent_message = bot.send_message(message.chat.id,
                                     f'{gform.name()}\n\n{gform.description() if gform.description() else ""}',
                                     reply_markup=markup)
-    user_data['form_messages_to_delete'][message.chat.id] = [message.id, sent_message.message_id]
+    user_data['form_messages_to_delete'][message.chat.id] = [message.id]
+    if delete_previous_message:
+        user_data['form_messages_to_delete'][message.chat.id].append(sent_message.message_id)
 
     def get_answer():
         try:
@@ -600,7 +738,7 @@ def send_question_form(message):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel_form_filling')
 @authorized_only(user_type='users')
-def cancel_form_filling_(call):
+def cancel_form_filling(call):
     if process_in_progress.get(call.message.chat.id) == 'question_form':
         del process_in_progress[call.message.chat.id]
 
@@ -641,7 +779,7 @@ def temp_authorize_user_by_contact(message):
 @authorized_only(user_type='users')
 def callback_ans(message):
     user_data['forms_ans'][message.chat.id] = message.text
-    user_data['messages_to_delete'][message.chat.id].append(message.id)
+    user_data['form_messages_to_delete'][message.chat.id].append(message.id)
 
 
 @bot.message_handler(
@@ -660,10 +798,11 @@ def proceed_contact_search(message, edit_message=False):
             employee_id = employee_info[0]
             employee_name = employee_info[1]
             employee_position = employee_info[2]
-            employee_gender = employee_info[3]
 
-            emoji = '👨‍💼' if employee_gender == 'M' else '👩‍💼'
-            btn = types.InlineKeyboardButton(text=f'{emoji} {employee_name} - {employee_position}',
+            formatted_name = employee_name.split()
+            formatted_name = f'{formatted_name[0]} {formatted_name[1][0]}. {formatted_name[2][0]}'
+            print(formatted_name)
+            btn = types.InlineKeyboardButton(text=f'👨‍💻 {formatted_name} - {employee_position}',
                                              callback_data=f'profile_s_{message.text}_{employee_id}')
             markup.add(btn)
 

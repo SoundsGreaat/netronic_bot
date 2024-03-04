@@ -34,7 +34,7 @@ def update_authorized_users(authorized_ids: dict):
 def find_contact_by_name(query):
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
-            'SELECT id, name, position, gender FROM employees WHERE name ILIKE'
+            'SELECT id, name, position FROM employees WHERE name ILIKE'
             '%s OR position ILIKE %s OR telegram_username = %s',
             (f'%{query}%', f'%{query}%', query))
         found_contacts = cursor.fetchall()

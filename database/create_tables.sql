@@ -16,12 +16,11 @@ CREATE TABLE IF NOT EXISTS employees
 (
     id                SERIAL PRIMARY KEY,
     sub_department_id INTEGER REFERENCES sub_departments (id),
-    name              VARCHAR(60)                          NOT NULL,
-    phone             VARCHAR(13)                          NOT NULL,
-    gender            CHAR(1) CHECK (gender IN ('M', 'F')) NOT NULL,
-    position          VARCHAR(60)                          NOT NULL,
+    name              VARCHAR(60) NOT NULL,
+    phone             VARCHAR(13) NOT NULL,
+    position          VARCHAR(60) NOT NULL,
     telegram_username VARCHAR(32),
-    telegram_user_id  INTEGER                              NOT NULL
+    telegram_user_id  INTEGER     NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS admins
