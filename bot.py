@@ -1011,12 +1011,12 @@ def proceed_contact_search(message, edit_message=False):
             employee_position = employee_info[2]
 
             formatted_name = employee_name.split()
-            formatted_name = f'{formatted_name[0]} {formatted_name[1][0]}. {formatted_name[2][0]}'
+            formatted_name = f'{formatted_name[0]} {formatted_name[1]}'
             btn = types.InlineKeyboardButton(text=f'👨‍💻 {formatted_name} - {employee_position}',
                                              callback_data=f'profile_s_{message.text}_{employee_id}')
             markup.add(btn)
 
-        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='search')
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
         markup.row(back_btn)
 
         if edit_message:

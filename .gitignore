@@ -2,3 +2,4 @@
 /docker-compose.yaml
 /database/create_departments_and_employees.sql
 /find_user_id.session
+/temp.py
