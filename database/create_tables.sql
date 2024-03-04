@@ -42,5 +42,5 @@ CREATE TABLE IF NOT EXISTS links
     id           SERIAL PRIMARY KEY,
     name         VARCHAR(60)  NOT NULL,
     link         VARCHAR(255) NOT NULL,
-    link_type_id INTEGER REFERENCES link_types (id)
+    link_type_id INTEGER      NOT NULL REFERENCES link_types (id)
 );
