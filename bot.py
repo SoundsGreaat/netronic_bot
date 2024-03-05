@@ -559,11 +559,9 @@ def proceed_add_employee_data(message):
             message_text = '🚫 ПІБ введено невірно.\nВведіть ПІБ українською мовою без цифр та спецсимволів:'
 
     elif not add_employee_data[message.chat.id].get('phone'):
-        if re.match(r'^\+?3?8?(0\d{9})$', message.text):
-            if re.match(r'^(0\d{9})$', message.text):
-                add_employee_data[message.chat.id]['phone'] = f'+38{message.text}'
-            else:
-                add_employee_data[message.chat.id]['phone'] = message.text
+        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', message.text))
+        if clear_number:
+            add_employee_data[message.chat.id]['phone'] = f'+38{clear_number.group(1)}'
             message_text = '💼 Введіть посаду нового співробітника:'
         else:
             message_text = ('🚫 Номер телефону введено невірно.'
