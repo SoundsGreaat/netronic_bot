@@ -28,10 +28,8 @@ user_data = {
     'forms_timer': {},
 }
 
-edit_employee_data = {
-    'saved_message': {},
-    'column': {},
-}
+edit_employee_data = defaultdict(dict)
+
 edit_link_data = {
     'saved_message': {},
     'column': {},
@@ -62,7 +60,7 @@ def authorized_only(user_type):
                             ''')
                     admin_list = [username[0] for username in cursor.fetchall()]
                 markup = types.ReplyKeyboardRemove()
-                print(f'Unauthorized user @{data.from_user.username} tried to access {func.__name__}\n')
+                print(f'Unauthorized user @{data.from_user.username} tried to access {func.__name__}')
                 bot.send_message(chat_id, f'Ви не авторизовані для використання цієї функції.'
                                           f'\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.'
                                           f'\n\nСписок адміністраторів: {", ".join(admin_list)}',
@@ -255,7 +253,7 @@ def proceed_add_link_data(message):
                 link_id = cursor.fetchone()[0]
                 conn.commit()
             message_text = f'✅ Посилання <b>{add_link_data[message.chat.id]["name"]}</b> успішно додано.'
-            log_text = f'Link {link_id} added by @{message.from_user.username}.\n'
+            log_text = f'Link {link_id} added by @{message.from_user.username}.'
             print(log_text)
             finish_function = True
 
@@ -593,7 +591,6 @@ def proceed_add_employee_data(message):
             return
 
         with DatabaseConnection() as (conn, cursor):
-            print(add_employee_data[message.chat.id])
             cursor.execute(
                 'INSERT INTO employees (name, phone, position, telegram_username, sub_department_id, telegram_user_id) '
                 'VALUES (%s, %s, %s, %s, %s, %s) RETURNING id',
@@ -721,12 +718,19 @@ def edit_employee(call):
     edit_phone_btn = types.InlineKeyboardButton(text='📞 Змінити телефон', callback_data=edit_phone_btn_callback)
     edit_position_btn = types.InlineKeyboardButton(text='💼 Змінити посаду', callback_data=edit_position_btn_callback)
     edit_username_btn = types.InlineKeyboardButton(text='🆔 Змінити юзернейм', callback_data=edit_username_btn_callback)
+    make_admin_btn = types.InlineKeyboardButton(text='⚠️ Переключити статус адміністратора',
+                                                callback_data=f'make_admin_{employee_id}')
     delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити контакт', callback_data=delete_btn_callback)
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
 
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn)
-    markup.row(delete_btn)
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT telegram_user_id FROM employees WHERE id = %s', (employee_id,))
+        employee_telegram_id = cursor.fetchone()[0]
+    if employee_telegram_id != call.from_user.id:
+        markup.row(make_admin_btn)
+        markup.row(delete_btn)
     markup.row(back_btn)
 
     with DatabaseConnection() as (conn, cursor):
@@ -737,17 +741,37 @@ def edit_employee(call):
                           call.message.message_id, reply_markup=markup, parse_mode='HTML')
 
     if process_in_progress.get(call.message.chat.id) == 'edit_employee':
-        del user_data['messages_to_delete'][call.message.chat.id]
         del process_in_progress[call.message.chat.id]
-        del edit_employee_data['saved_message'][call.from_user.id]
-        del edit_employee_data['column'][call.from_user.id]
+        del edit_employee_data[call.from_user.id]
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('make_admin_'))
+@authorized_only(user_type='admins')
+def make_admin(call):
+    employee_id = int(call.data.split('_')[2])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id FROM admins WHERE employee_id = %s', (employee_id,))
+        is_admin = cursor.fetchone()
+        if is_admin:
+            cursor.execute('DELETE FROM admins WHERE employee_id = %s', (employee_id,))
+            message_text = f'✅ Користувач {employee_id} більше не є адміністратором.'
+            log_text = f'Employee {employee_id} removed from admins by {call.from_user.username}.'
+        else:
+            cursor.execute('INSERT INTO admins (employee_id) VALUES (%s)', (employee_id,))
+            message_text = f'✅ Користувач {employee_id} тепер є адміністратором.'
+            log_text = f'Employee {employee_id} added to admins by {call.from_user.username}.'
+        conn.commit()
+        print(log_text)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, message_text)
+    bot.send_message(call.message.chat.id, call.message.text, reply_markup=call.message.reply_markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('e_'))
 @authorized_only(user_type='admins')
 def proceed_edit_employee(call):
     process_in_progress[call.message.chat.id] = 'edit_employee'
-    edit_employee_data['saved_message'][call.from_user.id] = call.message
+    edit_employee_data[call.from_user.id]['saved_message'] = call.message
     if call.data.split('_')[2] == 's':
         search_query, employee_id = call.data.split('_')[3:]
         employee_id = int(employee_id)
@@ -763,67 +787,104 @@ def proceed_edit_employee(call):
         employee_name = cursor.fetchone()[0]
 
     if call.data.startswith('e_name'):
-        edit_employee_data['column'][call.from_user.id] = ('name', employee_id)
+        edit_employee_data[call.from_user.id]['column'] = ('name', employee_id)
         message_text = f'✏️ Введіть нове ім\'я для контакту <b>{employee_name}</b>:'
     elif call.data.startswith('e_phone'):
-        edit_employee_data['column'][call.from_user.id] = ('phone', employee_id)
+        edit_employee_data[call.from_user.id]['column'] = ('phone', employee_id)
         message_text = f'📞 Введіть новий телефон для контакту <b>{employee_name}</b>:'
     elif call.data.startswith('e_pos'):
-        edit_employee_data['column'][call.from_user.id] = ('position', employee_id)
+        edit_employee_data[call.from_user.id]['column'] = ('position', employee_id)
         message_text = f'💼 Введіть нову посаду для контакту <b>{employee_name}</b>:'
     else:
-        edit_employee_data['column'][call.from_user.id] = ('telegram_username', employee_id)
+        edit_employee_data[call.from_user.id]['column'] = ('telegram_username', employee_id)
         message_text = f'🆔 Введіть новий юзернейм для контакту <b>{employee_name}</b>:'
 
     back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=back_btn_callback)
     markup = types.InlineKeyboardMarkup()
     markup.add(back_btn)
-
-    sent_message = bot.edit_message_text(message_text, call.message.chat.id, call.message.message_id,
-                                         reply_markup=markup, parse_mode='HTML')
-    user_data['messages_to_delete'][call.message.chat.id] = sent_message.message_id
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    sent_message = bot.send_message(call.message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
+    edit_employee_data[call.from_user.id]['saved_markup'] = markup
+    edit_employee_data[call.from_user.id]['saved_message'].message_id = sent_message.message_id
 
 
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'edit_employee')
 @authorized_only(user_type='admins')
 def edit_employee_data_ans(message):
-    column, employee_id = edit_employee_data['column'][message.chat.id]
+    finish_function = True
+    telegram_user_id = None
+    column, employee_id = edit_employee_data[message.chat.id]['column']
     new_value = message.text
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute(f'UPDATE employees SET {column} = %s WHERE id = %s', (new_value, employee_id))
-        conn.commit()
-        cursor.execute('SELECT name FROM employees WHERE id = %s', (employee_id,))
-        employee_name = cursor.fetchone()[0]
+        cursor.execute(f'SELECT name FROM employees WHERE id = %s', (employee_id,))
+        employee_data = cursor.fetchone()
+    employee_name = employee_data[0]
 
     if column == 'name':
-        message_text = f'✅ Ім\'я контакту змінено на <b>{new_value}</b>.'
-        log_text = f'Employee {employee_id} name changed to {new_value} by {message.from_user.username}.\n'
+        result_message_text = f'✅ Ім\'я контакту змінено на <b>{new_value}</b>.'
+        log_text = f'Employee {employee_id} name changed to {new_value} by {message.from_user.username}.'
 
     elif column == 'phone':
-        message_text = f'✅ Номер телефону контакту змінено на <b>{new_value}</b>.'
-        log_text = f'Employee {employee_id} phone changed to {new_value} by {message.from_user.username}.\n'
+        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', new_value))
+        print(clear_number)
+        if clear_number:
+            new_value = f'+38{clear_number.group(1)}'
+            result_message_text = f'✅ Номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
+            log_text = f'Employee {employee_id} phone changed to {new_value} by {message.from_user.username}.'
+        else:
+            result_message_text = ('🚫 Номер телефону введено невірно.'
+                                   '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+            log_text = ''
+            finish_function = False
 
     elif column == 'position':
-        message_text = f'✅ Посаду контакту змінено на <b>{new_value}</b>.'
-        log_text = f'Employee {employee_id} position changed to {new_value} by {message.from_user.username}.\n'
+        result_message_text = f'✅ Посаду контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
+        log_text = f'Employee {employee_id} position changed to {new_value} by {message.from_user.username}.'
 
+    elif column == 'telegram_username':
+        searching_message = bot.send_message(message.chat.id, '🔄 Пошук користувача в Telegram...')
+        telegram_user_id = asyncio.run(proceed_find_user_id(new_value))
+        bot.delete_message(message.chat.id, searching_message.message_id)
+        if telegram_user_id is not None:
+            if not new_value.startswith('@'):
+                new_value = f'@{new_value}'
+            result_message_text = f'✅ Юзернейм контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
+            log_text = f'Employee {employee_id} username changed to {new_value} by {message.from_user.username}.'
+        else:
+            result_message_text = (
+                '🚫 Користувач не знайдений. Перевірте правильність введеного юзернейму та спробуйте ще раз.')
+            log_text = ''
+            finish_function = False
     else:
-        message_text = f'✅ Юзернейм контакту змінено на <b>{new_value}</b>.'
-        log_text = f'Employee {employee_id} username changed to {new_value} by {message.from_user.username}.\n'
+        return  # This should never happen
 
-    print(log_text)
-
-    saved_message = edit_employee_data['saved_message'][message.chat.id]
+    saved_message = edit_employee_data[message.chat.id]['saved_message']
     bot.delete_message(message.chat.id, message.message_id)
-    bot.delete_message(message.chat.id, saved_message.message_id)
-    bot.send_message(message.chat.id, message_text, parse_mode='HTML')
-    bot.send_message(saved_message.chat.id, f'📝 Редагування контакту <b>{employee_name}</b>:',
-                     parse_mode='HTML', reply_markup=saved_message.reply_markup)
+    if edit_employee_data[message.chat.id].get('error_message'):
+        error_message = edit_employee_data[message.chat.id]['error_message']
+        bot.delete_message(message.chat.id, error_message.message_id)
+        del edit_employee_data[message.chat.id]['error_message']
+    else:
+        bot.delete_message(message.chat.id, saved_message.message_id)
 
-    del process_in_progress[message.chat.id]
-    del edit_employee_data['column'][message.chat.id]
-    del edit_employee_data['saved_message'][message.chat.id]
+    if not finish_function:
+        markup = edit_employee_data[message.chat.id]['saved_markup']
+        error_message = bot.send_message(message.chat.id, result_message_text, reply_markup=markup, parse_mode='HTML')
+        edit_employee_data[message.chat.id]['error_message'] = error_message
+    else:
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute(f'UPDATE employees SET {column} = %s WHERE id = %s', (new_value, employee_id))
+            if telegram_user_id is not None:
+                cursor.execute('UPDATE employees SET telegram_user_id = %s WHERE id = %s',
+                               (telegram_user_id, employee_id))
+            conn.commit()
+        bot.send_message(message.chat.id, result_message_text, parse_mode='HTML')
+        bot.send_message(message.chat.id, text=saved_message.text, reply_markup=saved_message.reply_markup,
+                         parse_mode='HTML')
+        del process_in_progress[message.chat.id]
+        del edit_employee_data[message.chat.id]
+        print(log_text)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_'))
@@ -878,7 +939,7 @@ def confirm_delete_employee(call):
         cursor.execute('DELETE FROM employees WHERE id = %s', (employee_id,))
         conn.commit()
 
-    print(f'Employee {employee_name} deleted by {call.from_user.username}.\n')
+    print(f'Employee {employee_name} deleted by {call.from_user.username}.')
     update_authorized_users(authorized_ids)
 
     bot.edit_message_text(f'✅ Контакт <b>{employee_name}</b> видалено.', call.message.chat.id,
@@ -964,11 +1025,11 @@ def temp_authorize_user_by_contact(message):
             bot.send_message(new_user_id, f'Вас тимчасово авторизовано адміністратором @{message.from_user.username}.')
 
             log_text = (f'User {new_user_id} temporarily authorized by @{message.from_user.username} with notification.'
-                        f'\nTemporarily authorized users: {authorized_ids["temp_users"]}\n')
+                        f'\nTemporarily authorized users: {authorized_ids["temp_users"]}')
         except apihelper.ApiTelegramException:
             log_text = (
                 f'User {new_user_id} temporarily authorized by @{message.from_user.username} without notification.'
-                f'\nTemporarily authorized users: {authorized_ids["temp_users"]}\n')
+                f'\nTemporarily authorized users: {authorized_ids["temp_users"]}')
 
         print(log_text)
 

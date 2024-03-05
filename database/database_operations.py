@@ -5,7 +5,7 @@ def test_connection():
     try:
         with DatabaseConnection():
             print('Database connection established.')
-        print('Connection test complete.\n')
+        print('Connection test complete.')
         return True
 
     except Exception as e:
@@ -28,7 +28,7 @@ def update_authorized_users(authorized_ids: dict):
 
         print(f'List of authorized users updated.'
               f'\nAuthorized users: {authorized_ids["users"]}'
-              f'\nAuthorized admins: {authorized_ids["admins"]}\n')
+              f'\nAuthorized admins: {authorized_ids["admins"]}')
 
 
 def find_contact_by_name(query):
