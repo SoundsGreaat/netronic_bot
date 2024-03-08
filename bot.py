@@ -1013,7 +1013,7 @@ def proceed_ai_question(message):
         limit=1
     )
     bot.edit_message_text(response.data[0].content[0].text.value, message.chat.id, sent_message.message_id,
-                          reply_markup=markup, parse_mode='HTML')
+                          reply_markup=markup, parse_mode='Markdown')
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel_ai_question')
