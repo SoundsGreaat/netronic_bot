@@ -768,6 +768,7 @@ def make_admin(call):
             log_text = f'Employee {employee_id} added to admins by {call.from_user.username}.'
         conn.commit()
         print(log_text)
+    update_authorized_users(authorized_ids)
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(call.message.chat.id, message_text)
     bot.send_message(call.message.chat.id, call.message.text, reply_markup=call.message.reply_markup)
