@@ -145,8 +145,9 @@ def send_main_menu(message):
             employee_name[0].split()) == 3 else ''
     with open('netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
-                       caption=f'👋 Вітаю<b>{user_first_name}</b>! Я бот-помічник <b>Netronic</b> 🌍'
-                               f'\nЩо ви хочете зробити?',
+                       caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
+                               f'<b>Netronic</b>.'
+                               f'\nЩо тебе цікавить?',
                        reply_markup=main_menu, parse_mode='HTML')
 
     if message.chat.id in authorized_ids['admins']:
