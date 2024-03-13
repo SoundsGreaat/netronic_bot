@@ -33,6 +33,7 @@ edit_employee_data = defaultdict(dict)
 edit_link_data = {
     'saved_message': {},
     'column': {},
+    'show_back_btn': {},
 }
 
 add_link_data = defaultdict(dict)
@@ -142,7 +143,7 @@ def send_main_menu(message):
         cursor.execute('SELECT name FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
         employee_name = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
-            employee_name[0].split()) == 3 else ''
+            employee_name[0].split()) >= 2 else ''
     with open('netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
@@ -192,31 +193,56 @@ def send_knowledge_base(message, edit_message=False):
 @bot.message_handler(func=lambda message: message.text == '💼 Бізнес-процеси')
 @authorized_only(user_type='users')
 def send_business_processes(message, edit_message=False):
-    send_links(message, 'business_process', edit_message)
+    personnel_management_btn = types.InlineKeyboardButton(text='📁 Кадрове діловодство',
+                                                          callback_data='b_process_personnel_management')
+    recruitment_btn = types.InlineKeyboardButton(text='🕵️ Recruitment', callback_data='b_process_recruitment')
+    office_equipment_btn = types.InlineKeyboardButton(text='💻 Забезпечення офісу',
+                                                      callback_data='b_process_office_equipment')
+    hr_btn = types.InlineKeyboardButton(text='👨‍💼 HR', callback_data='b_process_hr')
+
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(personnel_management_btn, recruitment_btn, office_equipment_btn, hr_btn)
+    if edit_message:
+        bot.edit_message_text('🔍 Оберіть бізнес-процес для перегляду:', message.chat.id, message.message_id,
+                              reply_markup=markup)
+    else:
+        bot.send_message(message.chat.id, '🔍 Оберіть бізнес-процес для перегляду:', reply_markup=markup)
 
 
-def send_links(message, link_type, edit_message=False):
+@bot.callback_query_handler(func=lambda call: call.data.startswith('b_process_'))
+@authorized_only(user_type='users')
+def send_business_process(call):
+    split_data = call.data.split('_', 2)
+    process_name = '_'.join(split_data[2:])
+    send_links(call.message, process_name, edit_message=True, show_back_btn=True)
+
+
+def send_links(message, link_type, edit_message=False, show_back_btn=False):
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('''SELECT links.id, links.name, links.link, link_type_id FROM link_types
+        cursor.execute('''SELECT links.id, links.name, links.link FROM link_types
                             JOIN links ON link_types.id = links.link_type_id
                             WHERE link_types.name = %s
                             ORDER BY LEFT(links.name, 1), links.id''', (link_type,))
         links = cursor.fetchall()
-        link_type_id = links[0][3]
+        cursor.execute('SELECT id FROM link_types WHERE name = %s', (link_type,))
+        link_type_id = cursor.fetchone()[0]
     markup = types.InlineKeyboardMarkup()
-    for link_id, link_name, link, _ in links:
+    for link_id, link_name, link in links:
         if link.startswith('https://docs.google.com/forms') or user_data['edit_link_mode'].get(message.chat.id):
-            btn = types.InlineKeyboardButton(text=link_name, callback_data=f'open_link_{link_id}')
+            btn = types.InlineKeyboardButton(text=link_name, callback_data=f'open_link_{link_id}_{int(show_back_btn)}')
         else:
             btn = types.InlineKeyboardButton(text=link_name, url=link)
         markup.add(btn)
     if user_data['edit_link_mode'].get(message.chat.id):
         add_link_btn = types.InlineKeyboardButton(text='➕ Додати посилання',
-                                                  callback_data=f'add_link_{link_type_id}')
+                                                  callback_data=f'add_link_{link_type_id}_{int(show_back_btn)}')
         markup.add(add_link_btn)
         message_text = '📝 Оберіть посилання для редагування:'
     else:
         message_text = '🔍 Оберіть посилання для перегляду:'
+    if show_back_btn:
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='business_processes')
+        markup.add(back_btn)
     if edit_message:
         bot.edit_message_text(message_text, message.chat.id, message.message_id,
                               reply_markup=markup)
@@ -224,12 +250,19 @@ def send_links(message, link_type, edit_message=False):
         bot.send_message(message.chat.id, message_text, reply_markup=markup)
 
 
+@bot.callback_query_handler(func=lambda call: call.data == 'business_processes')
+@authorized_only(user_type='users')
+def send_business_processes_menu(call):
+    send_business_processes(call.message, edit_message=True)
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_link_'))
 @authorized_only(user_type='admins')
 def add_link(call):
-    link_type_id = int(call.data.split('_')[2])
+    link_type_id, show_back_btn = map(int, call.data.split('_')[2:])
     process_in_progress[call.message.chat.id] = 'add_link'
-    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'back_to_send_links_{link_type_id}')
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
+                                            callback_data=f'back_to_send_links_{link_type_id}_{show_back_btn}')
     markup = types.InlineKeyboardMarkup()
     markup.add(cancel_btn)
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -238,6 +271,7 @@ def add_link(call):
                                     reply_markup=markup)
     add_link_data[call.message.chat.id]['saved_message'] = sent_message
     add_link_data[call.message.chat.id]['link_type_id'] = link_type_id
+    add_link_data[call.message.chat.id]['show_back_btn'] = show_back_btn
 
 
 @bot.message_handler(
@@ -246,6 +280,7 @@ def add_link(call):
 def proceed_add_link_data(message):
     finish_function = False
     link_type_id = add_link_data[message.chat.id]['link_type_id']
+    show_back_btn = add_link_data[message.chat.id]['show_back_btn']
     if not add_link_data[message.chat.id].get('name'):
         add_link_data[message.chat.id]['name'] = message.text
         message_text = '🔗 Введіть посилання:'
@@ -264,7 +299,8 @@ def proceed_add_link_data(message):
             print(log_text)
             finish_function = True
 
-    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'back_to_send_links_{link_type_id}')
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
+                                            callback_data=f'back_to_send_links_{link_type_id}_{show_back_btn}')
     markup = types.InlineKeyboardMarkup()
     markup.add(cancel_btn) if not finish_function else None
     saved_message = add_link_data[message.chat.id]['saved_message']
@@ -280,7 +316,7 @@ def proceed_add_link_data(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('open_link_'))
 @authorized_only(user_type='users')
 def send_form(call):
-    link_id = int(call.data.split('_')[2])
+    link_id, show_back_btn = map(int, call.data.split('_')[2:])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT name, link, link_type_id FROM links WHERE id = %s', (link_id,))
         link = cursor.fetchone()
@@ -291,12 +327,13 @@ def send_form(call):
         link_name = link[0]
         link_type_id = link[2]
         edit_link_name_btn = types.InlineKeyboardButton(text='📝 Редагувати назву',
-                                                        callback_data=f'edit_link_name_{link_id}')
+                                                        callback_data=f'edit_link_name_{link_id}_{show_back_btn}')
         edit_link_url_btn = types.InlineKeyboardButton(text='🔗 Редагувати посилання',
-                                                       callback_data=f'edit_link_url_{link_id}')
+                                                       callback_data=f'edit_link_url_{link_id}_{show_back_btn}')
         delete_link_btn = types.InlineKeyboardButton(text='🗑️ Видалити посилання',
-                                                     callback_data=f'delete_link_{link_id}')
-        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'back_to_send_links_{link_type_id}')
+                                                     callback_data=f'delete_link_{link_id}_{show_back_btn}')
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад',
+                                              callback_data=f'back_to_send_links_{link_type_id}_{show_back_btn}')
 
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(edit_link_name_btn, edit_link_url_btn, delete_link_btn, back_btn)
@@ -308,7 +345,8 @@ def send_form(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('edit_link_'))
 @authorized_only(user_type='admins')
 def edit_link(call):
-    operation, link_id = call.data.split('_')[2:]
+    operation, link_id = call.data.split('_')[2:4]
+    show_back_btn = int(call.data.split('_')[4])
     link_id = int(link_id)
     process_in_progress[call.message.chat.id] = 'edit_link'
     user_data['edit_link_mode'][call.message.chat.id] = True
@@ -316,7 +354,7 @@ def edit_link(call):
         cursor.execute('SELECT name FROM links WHERE id = %s', (link_id,))
         link_info = cursor.fetchone()
     link_name = link_info[0]
-    back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'open_link_{link_id}')
+    back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'open_link_{link_id}_{show_back_btn}')
     markup = types.InlineKeyboardMarkup()
     markup.add(back_btn)
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -328,6 +366,7 @@ def edit_link(call):
         message_text = f'🔗 Введіть нове посилання для <b>{link_name}</b>:'
     sent_message = bot.send_message(call.message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
     edit_link_data['saved_message'][call.message.chat.id] = sent_message
+    edit_link_data['show_back_btn'][call.message.chat.id] = show_back_btn
 
 
 @bot.message_handler(
@@ -335,6 +374,7 @@ def edit_link(call):
 @authorized_only(user_type='admins')
 def proceed_edit_link_data(message):
     column, link_id = edit_link_data['column'][message.chat.id]
+    show_back_btn = edit_link_data['show_back_btn'][message.chat.id]
 
     bot.delete_message(message.chat.id, edit_link_data['saved_message'][message.chat.id].message_id)
     bot.delete_message(message.chat.id, message.message_id)
@@ -343,7 +383,8 @@ def proceed_edit_link_data(message):
         if not re.match(r'^https?://.*', message.text):
             message_text = ('🚫 Посилання введено невірно.'
                             '\nВведіть посилання в форматі <b>http://</b> або <b>https://:</b>')
-            back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=f'open_link_{link_id}')
+            back_btn = types.InlineKeyboardButton(text='❌ Скасувати',
+                                                  callback_data=f'open_link_{link_id}_{show_back_btn}')
             markup = types.InlineKeyboardMarkup()
             markup.add(back_btn)
             sent_message = bot.send_message(message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
@@ -367,12 +408,13 @@ def proceed_edit_link_data(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_link_'))
 @authorized_only(user_type='admins')
 def delete_link_confirmation(call):
-    link_id = int(call.data.split('_')[2])
+    link_id, show_back_btn = map(int, call.data.split('_')[2:])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT name FROM links WHERE id = %s', (link_id,))
         link_info = cursor.fetchone()
     link_name = link_info[0]
-    back_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data=f'open_link_{link_id}')
+    back_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення',
+                                          callback_data=f'open_link_{link_id}_{show_back_btn}')
     confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення',
                                              callback_data=f'confirm_delete_link_{link_id}')
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -402,11 +444,11 @@ def back_to_send_links(call):
         del process_in_progress[call.message.chat.id]
         del add_link_data[call.message.chat.id]
 
-    link_type_id = int(call.data.split('_')[4])
+    link_type_id, show_back_btn = map(int, call.data.split('_')[4:])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT name FROM link_types WHERE id = %s', (link_type_id,))
         link_type_name = cursor.fetchone()[0]
-        send_links(call.message, link_type_name, edit_message=True)
+        send_links(call.message, link_type_name, edit_message=True, show_back_btn=bool(show_back_btn))
 
 
 @bot.message_handler(func=lambda message: message.text == '🔗 Стрічка новин')
@@ -438,8 +480,8 @@ def send_search_form(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(back_btn)
 
-    bot.edit_message_text('Введіть ім\'я або прізвище співробітника:', call.message.chat.id, call.message.message_id,
-                          reply_markup=markup)
+    bot.edit_message_text('Введіть ім\'я, прізвище або посаду співробітника:', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup)
 
     user_data['messages_to_delete'][call.message.chat.id] = call.message.message_id
 
@@ -449,13 +491,20 @@ def send_search_form(call):
 def send_departments(call):
     buttons = []
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT id, name FROM departments')
+        cursor.execute('SELECT id, name, additional_instance FROM departments ORDER BY name')
         departments = cursor.fetchall()
 
     for department in departments:
         department_id = department[0]
         department_name = department[1]
-        btn = types.InlineKeyboardButton(text=f'🏢 {department_name}', callback_data=f'dep_{department_id}')
+        additional_instance = department[2]
+
+        if additional_instance:
+            call_data = f'additional_{int(additional_instance)}_{department_id}'
+        else:
+            call_data = f'dep_{int(additional_instance)}_{department_id}'
+
+        btn = types.InlineKeyboardButton(text=f'🏢 {department_name}', callback_data=call_data)
         buttons.append(btn)
 
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_send_contacts')
@@ -468,26 +517,67 @@ def send_departments(call):
                           reply_markup=markup)
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('dep_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('additional_'))
 @authorized_only(user_type='users')
 def send_department_contacts(call):
-    department_id = int(call.data.split('_')[1])
+    additional_instance, department_id = map(int, call.data.split('_')[1:])
     buttons = []
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT id, name FROM sub_departments WHERE department_id = %s', (department_id,))
+        cursor.execute('SELECT id, name FROM intermediate_departments WHERE department_id = %s', (department_id,))
+        intermediate_departments = cursor.fetchall()
+
+    for intermediate_department in intermediate_departments:
+        intermediate_department_id = intermediate_department[0]
+        intermediate_department_name = intermediate_department[1]
+        btn = types.InlineKeyboardButton(text=f'🗄️ {intermediate_department_name}',
+                                         callback_data=
+                                         f'dep_{additional_instance}_{department_id}_{intermediate_department_id}')
+        buttons.append(btn)
+
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='departments')
+
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(*buttons)
+    markup.row(back_btn)
+
+    bot.edit_message_text(f'Оберіть відділ:', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('dep_'))
+@authorized_only(user_type='users')
+def send_department_contacts(call):
+    additional_instance, department_id = map(int, call.data.split('_')[1:3])
+    buttons = []
+    if additional_instance:
+        intermediate_department_id = int(call.data.split('_')[3])
+        db_column = 'intermediate_department_id'
+        instance_id = intermediate_department_id
+    else:
+        intermediate_department_id = 0
+        db_column = 'department_id'
+        instance_id = department_id
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute(f'SELECT id, name FROM sub_departments WHERE {db_column} = %s', (instance_id,))
         sub_departments = cursor.fetchall()
 
     for sub_department in sub_departments:
         sub_department_id = sub_department[0]
         sub_department_name = sub_department[1]
         btn = types.InlineKeyboardButton(text=f'🗄️ {sub_department_name}',
-                                         callback_data=f'sub_dep_{department_id}_{sub_department_id}')
+                                         callback_data=
+                                         f'sub_dep_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                         f'{sub_department_id}')
         buttons.append(btn)
+    if additional_instance:
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад',
+                                              callback_data=f'additional_{additional_instance}_{department_id}')
+    else:
+        back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='departments')
 
-    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='departments')
-
-    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(*buttons)
     markup.row(back_btn)
 
@@ -498,7 +588,8 @@ def send_department_contacts(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('sub_dep_'))
 @authorized_only(user_type='users')
 def send_sub_departments_contacts(call):
-    department_id, sub_department_id = map(int, call.data.split('_')[2:])
+    additional_instance, department_id, intermediate_department_id, sub_department_id = map(int,
+                                                                                            call.data.split('_')[2:])
     markup = types.InlineKeyboardMarkup(row_width=1)
 
     with DatabaseConnection() as (conn, cursor):
@@ -510,14 +601,19 @@ def send_sub_departments_contacts(call):
         employee_name = employee[1]
 
         btn = types.InlineKeyboardButton(text=f'👨‍💻 {employee_name}',
-                                         callback_data=f'profile_{department_id}_{sub_department_id}_{employee_id}')
+                                         callback_data=
+                                         f'profile_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                         f'{sub_department_id}_{employee_id}')
         markup.add(btn)
 
-    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'dep_{department_id}')
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'dep_{additional_instance}_{department_id}_'
+                                                                        f'{intermediate_department_id}')
 
     if call.from_user.id in authorized_ids['admins']:
         add_employee_btn = types.InlineKeyboardButton(text='➕ Додати співробітника',
-                                                      callback_data=f'add_employee_{department_id}_{sub_department_id}')
+                                                      callback_data=f'add_employee_{additional_instance}_'
+                                                                    f'{department_id}_{intermediate_department_id}_'
+                                                                    f'{sub_department_id}')
         markup.row(add_employee_btn)
 
     markup.row(back_btn)
@@ -534,14 +630,18 @@ def send_sub_departments_contacts(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_employee_'))
 @authorized_only(user_type='admins')
 def add_employee(call):
-    department_id, sub_department_id = map(int, call.data.split('_')[2:])
+    additional_instance, department_id, intermediate_department_id, sub_department_id = map(int,
+                                                                                            call.data.split('_')[2:])
     process_in_progress[call.message.chat.id] = 'add_employee'
     if add_employee_data.get(call.message.chat.id):
         del add_employee_data[call.message.chat.id]
     add_employee_data[call.message.chat.id]['department_id'] = department_id
     add_employee_data[call.message.chat.id]['sub_department_id'] = sub_department_id
+    add_employee_data[call.message.chat.id]['additional_instance'] = additional_instance
+    add_employee_data[call.message.chat.id]['intermediate_department_id'] = intermediate_department_id
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
-                                            callback_data=f'sub_dep_{department_id}_{sub_department_id}')
+                                            callback_data=f'sub_dep_{additional_instance}_{department_id}_'
+                                                          f'{intermediate_department_id}_{sub_department_id}')
     markup = types.InlineKeyboardMarkup()
     markup.add(cancel_btn)
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -554,8 +654,12 @@ def add_employee(call):
 @authorized_only(user_type='admins')
 def proceed_add_employee_data(message):
     finish_function = False
+    print(add_employee_data)
     department_id = add_employee_data[message.chat.id]['department_id']
     sub_department_id = add_employee_data[message.chat.id]['sub_department_id']
+    additional_instance = add_employee_data[message.chat.id]['additional_instance']
+    intermediate_department_id = add_employee_data[message.chat.id]['intermediate_department_id']
+
     if not add_employee_data[message.chat.id].get('name'):
         if re.match(r'^[А-ЯІЇЄҐа-яіїєґ\'\s]+$', message.text):
             add_employee_data[message.chat.id]['name'] = message.text
@@ -612,11 +716,12 @@ def proceed_add_employee_data(message):
             message_text = f'✅ Співробітник <b>{add_employee_data[message.chat.id]["name"]}</b> доданий до бази даних.'
             update_authorized_users(authorized_ids)
             finish_function = True
-            log_text = f'Employee {employee_id} added by @{message.from_user.username}.\n'
+            log_text = f'Employee {employee_id} added by @{message.from_user.username}.'
             print(log_text)
 
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
-                                            callback_data=f'sub_dep_{department_id}_{sub_department_id}')
+                                            callback_data=f'sub_dep_{department_id}_{intermediate_department_id}_'
+                                                          f'{sub_department_id}')
     markup = types.InlineKeyboardMarkup()
     markup.add(cancel_btn) if not finish_function else None
     saved_message = add_employee_data[message.chat.id]['saved_message']
@@ -627,7 +732,9 @@ def proceed_add_employee_data(message):
     if finish_function:
         del add_employee_data[message.chat.id]
         del process_in_progress[message.chat.id]
-        send_profile(message, call_data=f'profile_{department_id}_{sub_department_id}_{employee_id}')
+        send_profile(message,
+                     call_data=f'profile_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                               f'{sub_department_id}_{employee_id}')
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('profile_'))
@@ -645,9 +752,12 @@ def send_profile(call, call_data=None):
         back_btn_callback = f'bck_srch_{search_query}'
         edit_employee_btn_callback = f'edit_emp_s_{search_query}_{employee_id}'
     else:
-        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[1:])
-        back_btn_callback = f'sub_dep_{department_id}_{sub_department_id}'
-        edit_employee_btn_callback = f'edit_emp_{department_id}_{sub_department_id}_{employee_id}'
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id) = map(int, call.data.split('_')[1:])
+        back_btn_callback = (f'sub_dep_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                             f'{sub_department_id}')
+        edit_employee_btn_callback = (f'edit_emp_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                      f'{sub_department_id}_{employee_id}')
 
     markup = types.InlineKeyboardMarkup(row_width=1)
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
@@ -713,13 +823,20 @@ def edit_employee(call):
         delete_btn_callback = f'delete_s_{search_query}_{employee_id}'
         back_btn_callback = f'profile_s_{search_query}_{employee_id}'
     else:
-        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[2:])
-        edit_name_btn_callback = f'e_name_{department_id}_{sub_department_id}_{employee_id}'
-        edit_phone_btn_callback = f'e_phone_{department_id}_{sub_department_id}_{employee_id}'
-        edit_position_btn_callback = f'e_pos_{department_id}_{sub_department_id}_{employee_id}'
-        edit_username_btn_callback = f'e_uname_{department_id}_{sub_department_id}_{employee_id}'
-        delete_btn_callback = f'delete_{department_id}_{sub_department_id}_{employee_id}'
-        back_btn_callback = f'profile_{department_id}_{sub_department_id}_{employee_id}'
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id) = map(int, call.data.split('_')[2:])
+        edit_name_btn_callback = (f'e_name_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                  f'{sub_department_id}_{employee_id}')
+        edit_phone_btn_callback = (f'e_phone_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                   f'{sub_department_id}_{employee_id}')
+        edit_position_btn_callback = (f'e_pos_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                      f'{sub_department_id}_{employee_id}')
+        edit_username_btn_callback = (f'e_uname_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                      f'{sub_department_id}_{employee_id}')
+        delete_btn_callback = (f'delete_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                               f'{sub_department_id}_{employee_id}')
+        back_btn_callback = (f'profile_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                             f'{sub_department_id}_{employee_id}')
 
     edit_name_btn = types.InlineKeyboardButton(text='✏️ Змінити ім\'я', callback_data=edit_name_btn_callback)
     edit_phone_btn = types.InlineKeyboardButton(text='📞 Змінити телефон', callback_data=edit_phone_btn_callback)
@@ -786,9 +903,11 @@ def proceed_edit_employee(call):
 
         back_btn_callback = f'edit_emp_s_{search_query}_{employee_id}'
     else:
-        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[2:])
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id) = map(int, call.data.split('_')[2:])
 
-        back_btn_callback = f'edit_emp_{department_id}_{sub_department_id}_{employee_id}'
+        back_btn_callback = (f'edit_emp_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                             f'{sub_department_id}_{employee_id}')
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT name FROM employees WHERE id = %s', (employee_id,))
@@ -835,7 +954,6 @@ def edit_employee_data_ans(message):
 
     elif column == 'phone':
         clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', new_value))
-        print(clear_number)
         if clear_number:
             new_value = f'+38{clear_number.group(1)}'
             result_message_text = f'✅ Номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
@@ -906,10 +1024,10 @@ def delete_employee(call):
         confirm_btn_callback = f'confirm_delete_s_{employee_id}'
 
     else:
-        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[1:])
+        additional_instance, department_id, sub_department_id, employee_id = map(int, call.data.split('_')[1:])
 
-        cancel_btn_callback = f'edit_emp_{department_id}_{sub_department_id}_{employee_id}'
-        confirm_btn_callback = f'confirm_delete_{department_id}_{sub_department_id}_{employee_id}'
+        cancel_btn_callback = f'edit_emp_{additional_instance}_{department_id}_{sub_department_id}_{employee_id}'
+        confirm_btn_callback = f'confirm_delete_{additional_instance}_{department_id}_{sub_department_id}_{employee_id}'
 
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data=cancel_btn_callback)
     confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення', callback_data=confirm_btn_callback)
@@ -933,9 +1051,9 @@ def confirm_delete_employee(call):
         back_btn_callback = 'back_to_send_contacts'
 
     else:
-        department_id, sub_department_id, employee_id = map(int, call.data.split('_')[2:])
+        additional_instance, department_id, sub_department_id, employee_id = map(int, call.data.split('_')[2:])
 
-        back_btn_callback = f'sub_dep_{department_id}_{sub_department_id}'
+        back_btn_callback = f'sub_dep_{additional_instance}_{department_id}_{sub_department_id}'
 
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
     markup = types.InlineKeyboardMarkup()
