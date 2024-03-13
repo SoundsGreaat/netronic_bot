@@ -1024,10 +1024,13 @@ def delete_employee(call):
         confirm_btn_callback = f'confirm_delete_s_{employee_id}'
 
     else:
-        additional_instance, department_id, sub_department_id, employee_id = map(int, call.data.split('_')[1:])
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id) = map(int, call.data.split('_')[1:])
 
-        cancel_btn_callback = f'edit_emp_{additional_instance}_{department_id}_{sub_department_id}_{employee_id}'
-        confirm_btn_callback = f'confirm_delete_{additional_instance}_{department_id}_{sub_department_id}_{employee_id}'
+        cancel_btn_callback = (f'edit_emp_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                               f'{sub_department_id}_{employee_id}')
+        confirm_btn_callback = (f'confirm_delete_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                f'{sub_department_id}_{employee_id}')
 
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data=cancel_btn_callback)
     confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення', callback_data=confirm_btn_callback)
@@ -1051,9 +1054,11 @@ def confirm_delete_employee(call):
         back_btn_callback = 'back_to_send_contacts'
 
     else:
-        additional_instance, department_id, sub_department_id, employee_id = map(int, call.data.split('_')[2:])
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id) = map(int, call.data.split('_')[2:])
 
-        back_btn_callback = f'sub_dep_{additional_instance}_{department_id}_{sub_department_id}'
+        back_btn_callback = (f'sub_dep_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                             f'{sub_department_id}')
 
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
     markup = types.InlineKeyboardMarkup()
