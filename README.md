@@ -1,4 +1,7 @@
 # Netronic Bot / Telegram Bot
+
+[![Total time spent](https://wakatime.com/badge/github/SoundsGreaat/netronic_bot.svg)](https://wakatime.com/badge/github/SoundsGreaat/netronic_bot)
+
 ## Description
 The project aims to simplify the process of obtaining employee contacts. Users can quickly find the necessary information using a bot in the messenger, which allows them to effectively organize communication in the organization. It is possible to ask artificial intelligence for help and get answers to work-related questions.
 In addition, the project allows administrators to easily edit contact information to always have up-to-date employee data.
@@ -41,5 +44,5 @@ Telegram Bot name: [**@netronic_bot**](https://t.me/netronic_bot)
     OPENAI_API_KEY=your_openai_api_key
     OPENAI_ASSISTANT_ID=your_openai_assistant_id
     ```
-4. **Create a database**: Create a PostgreSQL database and fill it with the necessary data using the `create_tables.sql` file.
+4. **Create a database**: Create a PostgreSQL database, create tables using the `python create_tables.py` command and fill in the necessary data.
 5. **Run the bot**: `python bot.py`
