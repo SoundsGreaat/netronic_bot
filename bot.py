@@ -654,7 +654,6 @@ def add_employee(call):
 @authorized_only(user_type='admins')
 def proceed_add_employee_data(message):
     finish_function = False
-    print(add_employee_data)
     department_id = add_employee_data[message.chat.id]['department_id']
     sub_department_id = add_employee_data[message.chat.id]['sub_department_id']
     additional_instance = add_employee_data[message.chat.id]['additional_instance']
