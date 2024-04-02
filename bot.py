@@ -793,7 +793,7 @@ def send_profile(call, call_data=None):
                     f'\n\n🏢 Департамент: <b>{employee_department}</b>'
                     f'\n🗄️ Відділ: <b>{employee_sub_department}</b>'
                     f'\n💼 Посада: <b>{employee_position}</b>'
-                    f'\n📞 Телефон: <b>{employee_phone}</b>'
+                    f'\n📞 Телефон: <b>{employee_phone if employee_phone else "Телефону немає"}</b>'
                     f'\n🆔 Юзернейм: <b>{employee_username}</b>')
     if call_data:
         bot.send_message(chat_id, message_text, reply_markup=markup, parse_mode='HTML')
