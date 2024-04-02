@@ -1,6 +1,6 @@
 # Netronic Bot / Telegram Bot
 
-[![Total time spent](https://wakatime.com/badge/github/SoundsGreaat/netronic_bot.svg)](https://wakatime.com/badge/github/SoundsGreaat/netronic_bot)
+[![Static Badge](https://img.shields.io/badge/MIT-Lisence?style=for-the-badge&logo=github&label=License&color=yellow)](https://github.com/SoundsGreaat/netronic_bot?tab=MIT-1-ov-file)
 
 ## Description
 The project aims to simplify the process of obtaining employee contacts. Users can quickly find the necessary information using a bot in the messenger, which allows them to effectively organize communication in the organization. It is possible to ask artificial intelligence for help and get answers to work-related questions.
