@@ -35,7 +35,7 @@ def find_contact_by_name(query):
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
             'SELECT id, name, position FROM employees WHERE name ILIKE'
-            '%s OR position ILIKE %s OR telegram_username = %s',
+            '%s OR position ILIKE %s OR telegram_username = %s ORDER BY name',
             (f'%{query}%', f'%{query}%', query))
         found_contacts = cursor.fetchall()
         return found_contacts

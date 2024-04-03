@@ -593,7 +593,8 @@ def send_sub_departments_contacts(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT id, name FROM employees WHERE sub_department_id = %s', (sub_department_id,))
+        cursor.execute('SELECT id, name FROM employees WHERE sub_department_id = %s ORDER BY name',
+                       (sub_department_id,))
         employees = cursor.fetchall()
 
     for employee in employees:
@@ -789,12 +790,14 @@ def send_profile(call, call_data=None):
     employee_phone = employee_info[4]
     employee_username = employee_info[5]
 
+    phone_string = f'\n<b>📞 Телефон</b>: {employee_phone}' if employee_phone else ''
+
     message_text = (f'👨‍💻 <b>{employee_name}</b>'
-                    f'\n\n🏢 Департамент: <b>{employee_department}</b>'
-                    f'\n🗄️ Відділ: <b>{employee_sub_department}</b>'
-                    f'\n💼 Посада: <b>{employee_position}</b>'
-                    f'\n📞 Телефон: <b>{employee_phone if employee_phone else "Телефону немає"}</b>'
-                    f'\n🆔 Юзернейм: <b>{employee_username}</b>')
+                    f'\n\n<b>🏢 Департамент</b>: {employee_department}'
+                    f'\n<b>🗄️ Відділ</b>: {employee_sub_department}'
+                    f'\n<b>💼 Посада</b>: {employee_position}'
+                    f'{phone_string}'
+                    f'\n<b>🆔 Юзернейм</b>: {employee_username}')
     if call_data:
         bot.send_message(chat_id, message_text, reply_markup=markup, parse_mode='HTML')
     else:
@@ -1086,15 +1089,24 @@ def back_to_send_contacts_menu(call):
 
 @bot.message_handler(func=lambda message: message.text == '💭 Маєш питання?')
 @authorized_only(user_type='users')
-def ai_question(message):
-    openai_data[message.chat.id]['thread'] = client.beta.threads.create()
-    process_in_progress[message.chat.id] = 'ai_question'
-    cancel_btn = types.InlineKeyboardButton(text='🚪 Завершити сесію', callback_data='cancel_ai_question')
-    markup = types.InlineKeyboardMarkup()
-    markup.add(cancel_btn)
-    sent_message = bot.send_message(message.chat.id, '🤖 Сесію зі штучним інтелектом розпочато. Задайте своє питання.',
-                                    reply_markup=markup)
-    openai_data[message.chat.id]['sent_message'] = sent_message
+def send_form(message):
+    form_url = ('https://docs.google.com/forms/d/e/1FAIpQLSfcoy2DMzrZRtLzf8wzfDEZnk-4yIsL9uUBK5kOFBs0Q8N0dA/'
+                'viewform?usp=sf_link')
+    send_question_form(message, form_url)
+
+
+# Temporary disabled
+# @bot.message_handler(func=lambda message: message.text == '💭 Маєш питання?')
+# @authorized_only(user_type='users')
+# def ai_question(message):
+#     openai_data[message.chat.id]['thread'] = client.beta.threads.create()
+#     process_in_progress[message.chat.id] = 'ai_question'
+#     cancel_btn = types.InlineKeyboardButton(text='🚪 Завершити сесію', callback_data='cancel_ai_question')
+#     markup = types.InlineKeyboardMarkup()
+#     markup.add(cancel_btn)
+#     sent_message = bot.send_message(message.chat.id, '🤖 Сесію зі штучним інтелектом розпочато. Задайте своє питання.',
+#                                     reply_markup=markup)
+#     openai_data[message.chat.id]['sent_message'] = sent_message
 
 
 @bot.message_handler(
