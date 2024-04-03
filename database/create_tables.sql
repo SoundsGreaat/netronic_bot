@@ -1,15 +1,16 @@
 CREATE TABLE IF NOT EXISTS departments
 (
-    id   SERIAL PRIMARY KEY,
+    id                  SERIAL PRIMARY KEY,
     additional_instance BOOLEAN DEFAULT FALSE,
-    name VARCHAR(60) UNIQUE NOT NULL
+    name                VARCHAR(60) UNIQUE NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS intermediate_departments
 (
-    id            SERIAL PRIMARY KEY,
-    department_id INTEGER REFERENCES departments (id),
-    name          VARCHAR(60),
+    id                  SERIAL PRIMARY KEY,
+    department_id       INTEGER REFERENCES departments (id),
+    name                VARCHAR(60),
+    is_chief_department BOOLEAN DEFAULT FALSE NOT NULL,
     UNIQUE (department_id, name)
 );
 
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS sub_departments
     department_id              INTEGER REFERENCES departments (id),
     intermediate_department_id INTEGER REFERENCES intermediate_departments (id),
     name                       VARCHAR(60),
+    is_chief_department        BOOLEAN DEFAULT FALSE NOT NULL,
     UNIQUE (department_id, name)
 );
 
@@ -27,7 +29,7 @@ CREATE TABLE IF NOT EXISTS employees
     id                SERIAL PRIMARY KEY,
     sub_department_id INTEGER REFERENCES sub_departments (id),
     name              VARCHAR(60) NOT NULL,
-    phone             VARCHAR(13) NOT NULL,
+    phone             VARCHAR(13),
     position          VARCHAR(60) NOT NULL,
     telegram_username VARCHAR(32),
     telegram_user_id  BIGINT      NOT NULL

@@ -524,13 +524,17 @@ def send_department_contacts(call):
     buttons = []
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT id, name FROM intermediate_departments WHERE department_id = %s', (department_id,))
+        cursor.execute('''SELECT id, name, is_chief_department FROM intermediate_departments WHERE department_id = %s
+                            ORDER BY is_chief_department DESC, name''',
+                       (department_id,))
         intermediate_departments = cursor.fetchall()
 
     for intermediate_department in intermediate_departments:
         intermediate_department_id = intermediate_department[0]
         intermediate_department_name = intermediate_department[1]
-        btn = types.InlineKeyboardButton(text=f'🗄️ {intermediate_department_name}',
+        intermediate_department_is_chief = intermediate_department[2]
+        emoji = '👔' if intermediate_department_is_chief else '🗄️'
+        btn = types.InlineKeyboardButton(text=f'{emoji} {intermediate_department_name}',
                                          callback_data=
                                          f'dep_{additional_instance}_{department_id}_{intermediate_department_id}')
         buttons.append(btn)
@@ -560,13 +564,17 @@ def send_department_contacts(call):
         instance_id = department_id
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute(f'SELECT id, name FROM sub_departments WHERE {db_column} = %s', (instance_id,))
+        cursor.execute(f'''SELECT id, name, is_chief_department FROM sub_departments WHERE {db_column} = %s
+                                ORDER BY is_chief_department DESC, name''',
+                       (instance_id,))
         sub_departments = cursor.fetchall()
 
     for sub_department in sub_departments:
         sub_department_id = sub_department[0]
         sub_department_name = sub_department[1]
-        btn = types.InlineKeyboardButton(text=f'🗄️ {sub_department_name}',
+        sub_department_is_chief = sub_department[2]
+        emoji = '👔' if sub_department_is_chief else '🗄️'
+        btn = types.InlineKeyboardButton(text=f'{emoji} {sub_department_name}',
                                          callback_data=
                                          f'sub_dep_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                          f'{sub_department_id}')
