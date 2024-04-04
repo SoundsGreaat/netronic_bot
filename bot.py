@@ -127,7 +127,7 @@ knowledge_base_button = types.KeyboardButton('🎓 База знань')
 business_processes_button = types.KeyboardButton('💼 Бізнес-процеси')
 news_feed_button = types.KeyboardButton('🔗 Стрічка новин')
 contacts_button = types.KeyboardButton('📞 Контакти')
-support_button = types.KeyboardButton('💭 Маєш питання?')
+support_button = types.KeyboardButton('💭 Зауваження по роботі боту')
 
 main_menu.row(knowledge_base_button, business_processes_button)
 main_menu.row(news_feed_button, contacts_button)
@@ -1095,7 +1095,7 @@ def back_to_send_contacts_menu(call):
         del process_in_progress[call.message.chat.id]
 
 
-@bot.message_handler(func=lambda message: message.text == '💭 Маєш питання?')
+@bot.message_handler(func=lambda message: message.text == '💭 Зауваження по роботі боту')
 @authorized_only(user_type='users')
 def send_form(message):
     form_url = ('https://docs.google.com/forms/d/e/1FAIpQLSfcoy2DMzrZRtLzf8wzfDEZnk-4yIsL9uUBK5kOFBs0Q8N0dA/'
