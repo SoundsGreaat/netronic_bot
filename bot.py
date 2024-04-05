@@ -1181,8 +1181,7 @@ def send_question_form(message, form_url, delete_previous_message=False):
         link_btn = types.InlineKeyboardButton(text='🔗 Посилання на форму', url=form_url)
         markup = types.InlineKeyboardMarkup()
         markup.add(link_btn)
-        bot.send_message(message.chat.id, '🚫 Помилка: форма вимагає авторизації.'
-                                          '\nНатисніть кнопку нижче щоб перейти за посиланням.',
+        bot.send_message(message.chat.id, 'Натисніть кнопку нижче щоб перейти за посиланням.',
                          reply_markup=markup)
         return
 
