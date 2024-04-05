@@ -322,7 +322,7 @@ def send_form(call):
         link = cursor.fetchone()
     if not user_data['edit_link_mode'].get(call.message.chat.id):
         form_link = link[1]
-        send_question_form(call.message, form_link)
+        send_question_form(call.message, form_link, disable_fill_form=True)
     else:
         link_name = link[0]
         link_type_id = link[2]
@@ -1171,11 +1171,14 @@ def cancel_ai_question(call):
     del openai_data[call.message.chat.id]
 
 
-def send_question_form(message, form_url, delete_previous_message=False):
+def send_question_form(message, form_url, delete_previous_message=False, disable_fill_form=False):
     if process_in_progress.get(message.chat.id) == 'question_form':
         delete_messages(message.chat.id, 'form_messages_to_delete')
     process_in_progress[message.chat.id] = 'question_form'
+    # Temporary disabled
     try:
+        if disable_fill_form:
+            raise gforms.errors.SigninRequired(form_url)
         gform = FormFiller(form_url)
     except gforms.errors.SigninRequired:
         link_btn = types.InlineKeyboardButton(text='🔗 Посилання на форму', url=form_url)
