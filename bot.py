@@ -75,6 +75,12 @@ def authorized_only(user_type):
 
 
 def callback(element, page_index, element_index, message):
+    if element.name == 'Ваш ПІБ':
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT name FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
+            employee_name = cursor.fetchone()
+            return employee_name[0]
+
     sent_message = bot.send_message(message.chat.id, f'{element.name}:')
     try:
         user_data['form_messages_to_delete'][message.chat.id].append(sent_message.message_id)
