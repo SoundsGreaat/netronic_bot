@@ -761,7 +761,9 @@ def send_profile(call, call_data=None):
         chat_id = call.message.chat.id
 
     if call.data.startswith('profile_s_'):
-        search_query, employee_id = call.data.split('_')[2:]
+        parts = call.data.split('_')
+        search_query = '_'.join(parts[2:-1])
+        employee_id = parts[-1]
         employee_id = int(employee_id)
         back_btn_callback = f'bck_srch_{search_query}'
         edit_employee_btn_callback = f'edit_emp_s_{search_query}_{employee_id}'
@@ -821,7 +823,7 @@ def send_profile(call, call_data=None):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('bck_srch_'))
 @authorized_only(user_type='users')
 def back_to_search_results(call):
-    call.message.text = call.data.split('_')[2]
+    call.message.text = '_'.join(call.data.split('_')[2:])
     proceed_contact_search(call.message, edit_message=True)
 
 
@@ -829,7 +831,9 @@ def back_to_search_results(call):
 @authorized_only(user_type='admins')
 def edit_employee(call):
     if call.data.startswith('edit_emp_s'):
-        search_query, employee_id = call.data.split('_')[3:]
+        parts = call.data.split('_')
+        search_query = '_'.join(parts[3:-1])
+        employee_id = parts[-1]
         employee_id = int(employee_id)
 
         edit_name_btn_callback = f'e_name_s_{search_query}_{employee_id}'
@@ -914,7 +918,9 @@ def proceed_edit_employee(call):
     process_in_progress[call.message.chat.id] = 'edit_employee'
     edit_employee_data[call.from_user.id]['saved_message'] = call.message
     if call.data.split('_')[2] == 's':
-        search_query, employee_id = call.data.split('_')[3:]
+        parts = call.data.split('_')
+        search_query = '_'.join(parts[3:-1])
+        employee_id = parts[-1]
         employee_id = int(employee_id)
 
         back_btn_callback = f'edit_emp_s_{search_query}_{employee_id}'
@@ -1199,7 +1205,7 @@ def send_question_form(message, form_url, delete_previous_message=False, disable
     markup.add(btn)
 
     sent_message = bot.send_message(message.chat.id,
-                                    f'{gform.name()}\n\n{gform.description() if gform.description() else ""}',
+                                    f'{gform.title()}\n\n{gform.description() if gform.description() else ""}',
                                     reply_markup=markup)
     user_data['form_messages_to_delete'][message.chat.id] = [sent_message.message_id]
     if delete_previous_message:

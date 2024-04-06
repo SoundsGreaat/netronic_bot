@@ -27,6 +27,9 @@ class FormFiller:
     def description(self):
         return self.form.description
 
+    def title(self):
+        return self.form.title
+
 
 def main():
     form_url = os.getenv('FORM_URL')
