@@ -55,6 +55,7 @@ def authorized_only(user_type):
 
             if chat_id in authorized_ids[user_type] or chat_id in authorized_ids['temp_users'] and user_type == 'users':
                 func(data, *args, **kwargs)
+                print(f'User @{data.from_user.username} accessed {func.__name__}')
             else:
                 with DatabaseConnection() as (conn, cursor):
                     cursor.execute('''SELECT employees.telegram_username
