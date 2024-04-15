@@ -810,10 +810,13 @@ def send_profile(call, call_data=None):
     employee_username = employee_info[5]
     employee_intermediate_department = employee_info[6]
 
-    office_string = f'\n<b>🏢 Офіс/служба</b>: {employee_intermediate_department}' if employee_intermediate_department else ''
+    office_string = f'\n<b>🏢 Офіс/служба</b>: {employee_intermediate_department}' if employee_intermediate_department \
+        else ''
     sub_department_string = f'\n<b>🗄️ Відділ</b>: {employee_sub_department}' if (
             employee_sub_department != 'Відобразити співробітників') else ''
-    phone_string = f'\n<b>📞 Телефон</b>: {employee_phone}' if employee_phone else ''
+    phone_string = f'\n<b>📞 Телефон</b>: {employee_phone}' if employee_phone else f'\n<b>📞 Телефон</b>: Не вказано'
+    username_string = f'\n<b>🆔 Юзернейм</b>: {employee_username}' \
+        if employee_username else f'\n<b>🆔 Юзернейм</b>: Не вказано'
 
     message_text = (f'👨‍💻 <b>{employee_name}</b>'
                     f'\n\n<b>🏢 Департамент</b>: {employee_department}'
@@ -821,7 +824,7 @@ def send_profile(call, call_data=None):
                     f'{sub_department_string}'
                     f'\n<b>💼 Посада</b>: {employee_position}'
                     f'{phone_string}'
-                    f'\n<b>🆔 Юзернейм</b>: {employee_username}')
+                    f'{username_string}')
     if call_data:
         bot.send_message(chat_id, message_text, reply_markup=markup, parse_mode='HTML')
     else:
