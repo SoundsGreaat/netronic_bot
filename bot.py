@@ -788,14 +788,16 @@ def send_profile(call, call_data=None):
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('''SELECT emp.name,
-                                departments.name     AS department,
-                                sub_departments.name AS sub_department,
-                                emp.position,
-                                emp.phone,
-                                emp.telegram_username
+                                 departments.name     AS department,
+                                 sub_departments.name AS sub_department,
+                                 emp.position,
+                                 emp.phone,
+                                 emp.telegram_username,
+                                 intermediate_departments.name
                         FROM employees as emp
                         JOIN sub_departments ON emp.sub_department_id = sub_departments.id
                         JOIN departments ON sub_departments.department_id = departments.id
+                        LEFT JOIN intermediate_departments ON departments.id = intermediate_departments.department_id
                         WHERE emp.id = %s
                 ''', (employee_id,))
         employee_info = cursor.fetchone()
@@ -806,12 +808,17 @@ def send_profile(call, call_data=None):
     employee_position = employee_info[3]
     employee_phone = employee_info[4]
     employee_username = employee_info[5]
+    employee_intermediate_department = employee_info[6]
 
+    office_string = f'\n<b>🏢 Офіс/служба</b>: {employee_intermediate_department}' if employee_intermediate_department else ''
+    sub_department_string = f'\n<b>🗄️ Відділ</b>: {employee_sub_department}' if (
+            employee_sub_department != 'Відобразити співробітників') else ''
     phone_string = f'\n<b>📞 Телефон</b>: {employee_phone}' if employee_phone else ''
 
     message_text = (f'👨‍💻 <b>{employee_name}</b>'
                     f'\n\n<b>🏢 Департамент</b>: {employee_department}'
-                    f'\n<b>🗄️ Відділ</b>: {employee_sub_department}'
+                    f'{office_string}'
+                    f'{sub_department_string}'
                     f'\n<b>💼 Посада</b>: {employee_position}'
                     f'{phone_string}'
                     f'\n<b>🆔 Юзернейм</b>: {employee_username}')
