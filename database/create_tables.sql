@@ -56,3 +56,10 @@ CREATE TABLE IF NOT EXISTS links
     link         VARCHAR(255) NOT NULL,
     link_type_id INTEGER      NOT NULL REFERENCES link_types (id)
 );
+
+CREATE TABLE IF NOT EXISTS keywords
+(
+    id   SERIAL PRIMARY KEY,
+    employee_id INTEGER REFERENCES employees (id) ON DELETE CASCADE,
+    keyword     VARCHAR(60) NOT NULL
+);

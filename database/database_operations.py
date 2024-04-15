@@ -32,10 +32,17 @@ def update_authorized_users(authorized_ids: dict):
 
 
 def find_contact_by_name(query):
+    words = query.split()
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute(
-            'SELECT id, name, position FROM employees WHERE name ILIKE'
-            '%s OR position ILIKE %s OR telegram_username = %s ORDER BY name',
-            (f'%{query}%', f'%{query}%', query))
-        found_contacts = cursor.fetchall()
-        return found_contacts
+        for word in words:
+            cursor.execute(
+                '''
+                SELECT emp.id, emp.name, emp.position, key.keyword
+                FROM employees emp
+                LEFT JOIN keywords key ON emp.id = key.employee_id
+                WHERE emp.name ILIKE %s OR emp.position ILIKE %s OR key.keyword ILIKE %s OR emp.telegram_username = %s
+                ORDER BY emp.name
+                ''',
+                (f'%{word}%', f'%{word}%', f'%{word}%', word))
+            found_contacts = cursor.fetchall()
+            return found_contacts
