@@ -229,7 +229,7 @@ def send_links(message, link_type, edit_message=False, show_back_btn=False):
         cursor.execute('''SELECT links.id, links.name, links.link FROM link_types
                             JOIN links ON link_types.id = links.link_type_id
                             WHERE link_types.name = %s
-                            ORDER BY LEFT(links.name, 1), links.id''', (link_type,))
+                            ORDER BY LEFT(links.name, 1), links.name''', (link_type,))
         links = cursor.fetchall()
         cursor.execute('SELECT id FROM link_types WHERE name = %s', (link_type,))
         link_type_id = cursor.fetchone()[0]
