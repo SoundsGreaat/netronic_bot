@@ -797,7 +797,8 @@ def send_profile(call, call_data=None):
                         FROM employees as emp
                         JOIN sub_departments ON emp.sub_department_id = sub_departments.id
                         JOIN departments ON sub_departments.department_id = departments.id
-                        LEFT JOIN intermediate_departments ON departments.id = intermediate_departments.department_id
+                        LEFT JOIN intermediate_departments ON 
+                                                sub_departments.intermediate_department_id = intermediate_departments.id
                         WHERE emp.id = %s
                 ''', (employee_id,))
         employee_info = cursor.fetchone()
