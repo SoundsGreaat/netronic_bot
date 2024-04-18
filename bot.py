@@ -30,6 +30,8 @@ user_data = {
 
 edit_employee_data = defaultdict(dict)
 
+add_keyword_data = defaultdict(dict)
+
 edit_link_data = {
     'saved_message': {},
     'column': {},
@@ -728,11 +730,11 @@ def proceed_add_employee_data(message):
                  add_employee_data[message.chat.id]['telegram_user_id']))
             employee_id = cursor.fetchone()[0]
             conn.commit()
-            message_text = f'✅ Співробітник <b>{add_employee_data[message.chat.id]["name"]}</b> доданий до бази даних.'
-            update_authorized_users(authorized_ids)
-            finish_function = True
-            log_text = f'Employee {employee_id} added by @{message.from_user.username}.'
-            print(log_text)
+        message_text = f'✅ Співробітник <b>{add_employee_data[message.chat.id]["name"]}</b> доданий до бази даних.'
+        update_authorized_users(authorized_ids)
+        finish_function = True
+        log_text = f'Employee {employee_id} added by @{message.from_user.username}.'
+        print(log_text)
 
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
                                             callback_data=f'sub_dep_{department_id}_{intermediate_department_id}_'
@@ -852,6 +854,7 @@ def edit_employee(call):
         edit_phone_btn_callback = f'e_phone_s_{search_query}_{employee_id}'
         edit_position_btn_callback = f'e_pos_s_{search_query}_{employee_id}'
         edit_username_btn_callback = f'e_uname_s_{search_query}_{employee_id}'
+        show_keywords_btn_callback = f'show_keywords_s_{search_query}_{employee_id}'
         delete_btn_callback = f'delete_s_{search_query}_{employee_id}'
         back_btn_callback = f'profile_s_{search_query}_{employee_id}'
     else:
@@ -865,6 +868,9 @@ def edit_employee(call):
                                       f'{sub_department_id}_{employee_id}')
         edit_username_btn_callback = (f'e_uname_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                       f'{sub_department_id}_{employee_id}')
+        show_keywords_btn_callback = (
+            f'show_keywords_{additional_instance}_{department_id}_{intermediate_department_id}_'
+            f'{sub_department_id}_{employee_id}')
         delete_btn_callback = (f'delete_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                f'{sub_department_id}_{employee_id}')
         back_btn_callback = (f'profile_{additional_instance}_{department_id}_{intermediate_department_id}_'
@@ -874,13 +880,15 @@ def edit_employee(call):
     edit_phone_btn = types.InlineKeyboardButton(text='📞 Змінити телефон', callback_data=edit_phone_btn_callback)
     edit_position_btn = types.InlineKeyboardButton(text='💼 Змінити посаду', callback_data=edit_position_btn_callback)
     edit_username_btn = types.InlineKeyboardButton(text='🆔 Змінити юзернейм', callback_data=edit_username_btn_callback)
+    show_keywords_btn = types.InlineKeyboardButton(text='🔍 Показати ключові слова',
+                                                   callback_data=show_keywords_btn_callback)
     make_admin_btn = types.InlineKeyboardButton(text='⚠️ Переключити статус адміністратора',
                                                 callback_data=f'make_admin_{employee_id}')
     delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити контакт', callback_data=delete_btn_callback)
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
 
     markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn)
+    markup.add(edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn, show_keywords_btn)
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT telegram_user_id FROM employees WHERE id = %s', (employee_id,))
         employee_telegram_id = cursor.fetchone()[0]
@@ -901,6 +909,164 @@ def edit_employee(call):
         del edit_employee_data[call.from_user.id]
 
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith('show_keywords_'))
+@authorized_only(user_type='admins')
+def show_keywords(call):
+    if call.data.startswith('show_keywords_s'):
+        parts = call.data.split('_')
+        search_query = '_'.join(parts[3:-1])
+        employee_id = parts[-1]
+        employee_id = int(employee_id)
+        keyword_btn_callback = f'd_kwd_s_{search_query}_{employee_id}'
+        add_keyword_btn_callback = f'a_kwd_s_{search_query}_{employee_id}'
+        back_btn_callback = f'edit_emp_s_{search_query}_{employee_id}'
+    else:
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id) = map(int, call.data.split('_')[2:])
+        keyword_btn_callback = (f'd_kwd_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                f'{sub_department_id}_{employee_id}')
+        add_keyword_btn_callback = (f'a_kwd_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                    f'{sub_department_id}_{employee_id}')
+        back_btn_callback = f'edit_emp_{additional_instance}_{department_id}_{intermediate_department_id}_' \
+                            f'{sub_department_id}_{employee_id}'
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id, keyword FROM keywords WHERE employee_id = %s ORDER BY keyword', (employee_id,))
+        keywords = cursor.fetchall()
+        cursor.execute('SELECT name FROM employees WHERE id = %s', (employee_id,))
+        employee_name = cursor.fetchone()[0]
+
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for keyword_id, keyword in keywords:
+        keyword_btn = types.InlineKeyboardButton(text=f'🔍 {keyword}',
+                                                 callback_data=f'{keyword_btn_callback}_{keyword_id}')
+        markup.add(keyword_btn)
+
+    add_keyword_btn = types.InlineKeyboardButton(text='➕ Додати ключове слово', callback_data=add_keyword_btn_callback)
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
+    markup.add(add_keyword_btn, back_btn)
+
+    bot.edit_message_text(f'Ключові слова для контакту <b>{employee_name}</b>:', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('a_kwd_'))
+@authorized_only(user_type='admins')
+def add_keyword(call):
+    if call.data.startswith('a_kwd_s'):
+        parts = call.data.split('_')
+        search_query = '_'.join(parts[3:-1])
+        employee_id = parts[-1]
+        employee_id = int(employee_id)
+        back_btn_callback = f'show_keywords_s_{search_query}_{employee_id}'
+    else:
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id) = map(int, call.data.split('_')[2:])
+        back_btn_callback = f'show_keywords_{additional_instance}_{department_id}_{intermediate_department_id}_' \
+                            f'{sub_department_id}_{employee_id}'
+
+    process_in_progress[call.message.chat.id] = 'add_keyword'
+    add_keyword_data[call.message.chat.id]['employee_id'] = employee_id
+    add_keyword_data[call.message.chat.id]['back_btn_callback'] = back_btn_callback
+
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=back_btn_callback)
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    sent_message = bot.send_message(call.message.chat.id, '🔍 Введіть ключові слова через кому.\n'
+                                                          'Приклад: <i>програміст, розробник, IT-спеціаліст</i>',
+                                    reply_markup=markup, parse_mode='HTML')
+    add_keyword_data[call.message.chat.id]['saved_message'] = sent_message
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'add_keyword')
+@authorized_only(user_type='admins')
+def proceed_add_keyword_data(message):
+    employee_id = add_keyword_data[message.chat.id]['employee_id']
+    back_btn_callback = add_keyword_data[message.chat.id]['back_btn_callback']
+    split_message = message.text.split(',')
+
+    with DatabaseConnection() as (conn, cursor):
+        for keyword in split_message:
+            cursor.execute('INSERT INTO keywords (employee_id, keyword) VALUES (%s, %s)',
+                           (employee_id, keyword.strip()))
+        conn.commit()
+
+    print(f'Keywords "{message.text}" added to employee {employee_id} by {message.from_user.username}.')
+
+    markup = types.InlineKeyboardMarkup()
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
+    markup.add(back_btn)
+
+    bot.delete_message(message.chat.id, add_keyword_data[message.chat.id]['saved_message'].message_id)
+    bot.send_message(message.chat.id, '✅ Ключові слова успішно додані.', reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('d_kwd_'))
+@authorized_only(user_type='admins')
+def delete_keyword(call):
+    if call.data.startswith('d_kwd_s'):
+        parts = call.data.split('_')
+        search_query = '_'.join(parts[3:-2])
+        employee_id = int(parts[-2])
+        keyword_id = int(parts[-1])
+        confirm_delete_keyword_callback = f'cd_kwd_s_{search_query}_{employee_id}_{keyword_id}'
+        back_btn_callback = f'show_keywords_s_{search_query}_{employee_id}'
+    else:
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id, keyword_id) = map(int, call.data.split('_')[2:])
+        confirm_delete_keyword_callback = (f'cd_kwd_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                           f'{sub_department_id}_{employee_id}_{keyword_id}')
+        back_btn_callback = (f'show_keywords_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                             f'{sub_department_id}_{employee_id}')
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT keyword FROM keywords WHERE id = %s', (keyword_id,))
+        keyword = cursor.fetchone()[0]
+
+    message_text = f'Підтвердіть видалення ключового слова <b>{keyword}</b>:'
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    back_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data=back_btn_callback)
+    confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення',
+                                             callback_data=confirm_delete_keyword_callback)
+    markup.add(confirm_btn, back_btn)
+
+    bot.edit_message_text(message_text, call.message.chat.id, call.message.message_id, reply_markup=markup,
+                          parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('cd_kwd_'))
+@authorized_only(user_type='admins')
+def confirm_delete_keyword(call):
+    if call.data.startswith('cd_kwd_s'):
+        parts = call.data.split('_')
+        search_query = '_'.join(parts[3:-2])
+        employee_id = int(parts[-2])
+        keyword_id = int(parts[-1])
+        back_btn_callback = f'show_keywords_s_{search_query}_{employee_id}'
+    else:
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id, keyword_id) = map(int, call.data.split('_')[2:])
+        back_btn_callback = (f'show_keywords_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                             f'{sub_department_id}_{employee_id}')
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('DELETE FROM keywords WHERE id = %s RETURNING keyword', (keyword_id,))
+        keyword = cursor.fetchone()[0]
+        conn.commit()
+
+    print(f'Keyword "{keyword}" deleted from employee {employee_id} by {call.from_user.username}.')
+
+    message_text = f'✅ Ключове слово <b>{keyword}</b> видалено.'
+    markup = types.InlineKeyboardMarkup()
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
+    markup.add(back_btn)
+
+    bot.edit_message_text(message_text, call.message.chat.id, call.message.message_id, reply_markup=markup,
+                          parse_mode='HTML')
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('make_admin_'))
 @authorized_only(user_type='admins')
 def make_admin(call):
@@ -917,7 +1083,7 @@ def make_admin(call):
             message_text = f'✅ Користувач {employee_id} тепер є адміністратором.'
             log_text = f'Employee {employee_id} added to admins by {call.from_user.username}.'
         conn.commit()
-        print(log_text)
+    print(log_text)
     update_authorized_users(authorized_ids)
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(call.message.chat.id, message_text)

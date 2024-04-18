@@ -37,11 +37,12 @@ def find_contact_by_name(query):
         for word in words:
             cursor.execute(
                 '''
-                SELECT emp.id, emp.name, emp.position, key.keyword
+                SELECT emp.id, emp.name, emp.position, string_agg(key.keyword, ', ') as keywords
                 FROM employees emp
                 LEFT JOIN keywords key ON emp.id = key.employee_id
                 WHERE emp.name ILIKE %s OR emp.position ILIKE %s OR key.keyword ILIKE %s OR emp.telegram_username = %s
-                ORDER BY emp.name
+                GROUP BY emp.id, emp.name, emp.position
+                ORDER BY emp.name;
                 ''',
                 (f'%{word}%', f'%{word}%', f'%{word}%', word))
             found_contacts = cursor.fetchall()
