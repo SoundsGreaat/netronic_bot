@@ -1002,6 +1002,9 @@ def proceed_add_keyword_data(message):
     bot.delete_message(message.chat.id, add_keyword_data[message.chat.id]['saved_message'].message_id)
     bot.send_message(message.chat.id, '✅ Ключові слова успішно додані.', reply_markup=markup)
 
+    del process_in_progress[message.chat.id]
+    del add_keyword_data[message.chat.id]
+
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('d_kwd_'))
 @authorized_only(user_type='admins')
@@ -1208,6 +1211,7 @@ def edit_employee_data_ans(message):
         bot.send_message(message.chat.id, result_message_text, parse_mode='HTML')
         bot.send_message(message.chat.id, text=saved_message.text, reply_markup=saved_message.reply_markup,
                          parse_mode='HTML')
+
         del process_in_progress[message.chat.id]
         del edit_employee_data[message.chat.id]
         print(log_text)
