@@ -681,6 +681,14 @@ def proceed_add_employee_data(message):
         if re.match(r'^[А-ЯІЇЄҐа-яіїєґ\'\s]+$', message.text):
             add_employee_data[message.chat.id]['name'] = message.text
             message_text = '📞 Введіть номер телефону нового співробітника:'
+            with DatabaseConnection() as (conn, cursor):
+                cursor.execute('SELECT name FROM employees WHERE name = %s AND sub_department_id = %s',
+                               (add_employee_data[message.chat.id]['name'], sub_department_id))
+                employee_name = cursor.fetchone()
+            if employee_name:
+                message_text = ('🚫 Співробітник з таким ПІБ вже існує в базі даних.'
+                                '\nВведіть унікальне ПІБ нового співробітника:')
+                add_employee_data[message.chat.id].pop('name')
         else:
             message_text = '🚫 ПІБ введено невірно.\nВведіть ПІБ українською мовою без цифр та спецсимволів:'
 
@@ -737,8 +745,8 @@ def proceed_add_employee_data(message):
         print(log_text)
 
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
-                                            callback_data=f'sub_dep_{department_id}_{intermediate_department_id}_'
-                                                          f'{sub_department_id}')
+                                            callback_data=f'sub_dep_{additional_instance}_{department_id}_'
+                                                          f'{intermediate_department_id}_{sub_department_id}')
     markup = types.InlineKeyboardMarkup()
     markup.add(cancel_btn) if not finish_function else None
     saved_message = add_employee_data[message.chat.id]['saved_message']
