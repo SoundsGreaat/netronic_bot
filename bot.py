@@ -670,20 +670,22 @@ def add_employee(call):
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'add_employee')
 @authorized_only(user_type='admins')
-def proceed_add_employee_data(message):
+def proceed_add_employee_data(message, delete_user_message=True, skip_phone=False):
     finish_function = False
     department_id = add_employee_data[message.chat.id]['department_id']
     sub_department_id = add_employee_data[message.chat.id]['sub_department_id']
     additional_instance = add_employee_data[message.chat.id]['additional_instance']
     intermediate_department_id = add_employee_data[message.chat.id]['intermediate_department_id']
 
+    skip_btn = None
+
     if not add_employee_data[message.chat.id].get('name'):
         if re.match(r'^[А-ЯІЇЄҐа-яіїєґ\'\s]+$', message.text):
             add_employee_data[message.chat.id]['name'] = message.text
             message_text = '📞 Введіть номер телефону нового співробітника:'
             with DatabaseConnection() as (conn, cursor):
-                cursor.execute('SELECT name FROM employees WHERE name = %s AND sub_department_id = %s',
-                               (add_employee_data[message.chat.id]['name'], sub_department_id))
+                cursor.execute('SELECT name FROM employees WHERE name = %s',
+                               (add_employee_data[message.chat.id]['name'],))
                 employee_name = cursor.fetchone()
             if employee_name:
                 message_text = ('🚫 Співробітник з таким ПІБ вже існує в базі даних.'
@@ -691,17 +693,23 @@ def proceed_add_employee_data(message):
                 add_employee_data[message.chat.id].pop('name')
         else:
             message_text = '🚫 ПІБ введено невірно.\nВведіть ПІБ українською мовою без цифр та спецсимволів:'
+        if add_employee_data[message.chat.id].get('name'):
+            skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_phone')
 
     elif not add_employee_data[message.chat.id].get('phone'):
         clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', message.text))
-        if clear_number:
-            add_employee_data[message.chat.id]['phone'] = f'+38{clear_number.group(1)}'
-            message_text = '💼 Введіть посаду нового співробітника:'
+        message_text = '💼 Введіть посаду нового співробітника:'
+        if skip_phone:
+            add_employee_data[message.chat.id]['phone'] = 'skip'
         else:
-            message_text = ('🚫 Номер телефону введено невірно.'
-                            '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+            if clear_number:
+                add_employee_data[message.chat.id]['phone'] = f'+38{clear_number.group(1)}'
+            else:
+                message_text = ('🚫 Номер телефону введено невірно.'
+                                '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
 
     elif not add_employee_data[message.chat.id].get('position'):
+        print(message.text)
         add_employee_data[message.chat.id]['position'] = message.text
         message_text = '🆔 Введіть юзернейм нового співробітника:'
 
@@ -726,6 +734,9 @@ def proceed_add_employee_data(message):
             add_employee_data[message.chat.id]['saved_message'] = sent_message
             return
 
+        if add_employee_data[message.chat.id]['phone'] == 'skip':
+            add_employee_data[message.chat.id]['phone'] = None
+
         with DatabaseConnection() as (conn, cursor):
             cursor.execute(
                 'INSERT INTO employees (name, phone, position, telegram_username, sub_department_id, telegram_user_id) '
@@ -748,10 +759,12 @@ def proceed_add_employee_data(message):
                                             callback_data=f'sub_dep_{additional_instance}_{department_id}_'
                                                           f'{intermediate_department_id}_{sub_department_id}')
     markup = types.InlineKeyboardMarkup()
+    markup.add(skip_btn) if skip_btn else None
     markup.add(cancel_btn) if not finish_function else None
     saved_message = add_employee_data[message.chat.id]['saved_message']
     bot.delete_message(message.chat.id, saved_message.message_id)
-    bot.delete_message(message.chat.id, message.message_id)
+    if delete_user_message:
+        bot.delete_message(message.chat.id, message.message_id)
     sent_message = bot.send_message(message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
     add_employee_data[message.chat.id]['saved_message'] = sent_message
     if finish_function:
@@ -760,6 +773,12 @@ def proceed_add_employee_data(message):
         send_profile(message,
                      call_data=f'profile_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                f'{sub_department_id}_{employee_id}')
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'skip_phone')
+@authorized_only(user_type='admins')
+def skip_phone(call):
+    proceed_add_employee_data(call.message, delete_user_message=False, skip_phone=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('profile_'))
