@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS employees
     phone             VARCHAR(13),
     position          VARCHAR(60) NOT NULL,
     telegram_username VARCHAR(32),
-    telegram_user_id  BIGINT      NOT NULL
+    telegram_user_id  BIGINT      NOT NULL,
+    email             VARCHAR(60)
 );
 
 
@@ -59,7 +60,7 @@ CREATE TABLE IF NOT EXISTS links
 
 CREATE TABLE IF NOT EXISTS keywords
 (
-    id   SERIAL PRIMARY KEY,
+    id          SERIAL PRIMARY KEY,
     employee_id INTEGER REFERENCES employees (id) ON DELETE CASCADE,
     keyword     VARCHAR(60) NOT NULL
 );
