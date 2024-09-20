@@ -3,6 +3,8 @@ import re
 import threading
 import asyncio
 import time
+from datetime import datetime
+
 import gforms
 
 from collections import defaultdict
@@ -13,6 +15,7 @@ from openai import OpenAI
 from google_forms_filler import FormFiller
 from database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
 from telegram_user_id_search import proceed_find_user_id
+from make_card import make_card
 
 authorized_ids = {
     'users': set(),
@@ -43,6 +46,8 @@ add_link_data = defaultdict(dict)
 add_employee_data = defaultdict(dict)
 
 openai_data = defaultdict(dict)
+
+make_card_data = defaultdict(dict)
 
 process_in_progress = {}
 
@@ -136,11 +141,12 @@ knowledge_base_button = types.KeyboardButton('🎓 База знань')
 business_processes_button = types.KeyboardButton('💼 Бізнес-процеси')
 news_feed_button = types.KeyboardButton('🔗 Стрічка новин')
 contacts_button = types.KeyboardButton('📞 Контакти')
+make_card_button = types.KeyboardButton('📜 Меню подяк')
 support_button = types.KeyboardButton('💭 Зауваження по роботі боту')
 
 main_menu.row(knowledge_base_button, business_processes_button)
 main_menu.row(news_feed_button, contacts_button)
-main_menu.row(support_button)
+main_menu.row(make_card_button, support_button)
 
 button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
 
@@ -1348,6 +1354,162 @@ def back_to_send_contacts_menu(call):
     send_contacts_menu(call.message, edit_message=True)
     if process_in_progress.get(call.message.chat.id) == 'search':
         del process_in_progress[call.message.chat.id]
+
+
+@bot.message_handler(func=lambda message: message.text == '📜 Меню подяк')
+@authorized_only(user_type='users')
+def thanks_menu(message):
+    show_thanks_button = types.InlineKeyboardButton(text='🔍 Передивитись подяки', callback_data='show_thanks')
+    send_thanks_button = types.InlineKeyboardButton(text='📜 Надіслати подяку', callback_data='send_thanks')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(show_thanks_button, send_thanks_button, row_width=1)
+    sent_message = bot.send_message(message.chat.id, '🔽 Оберіть дію:',
+                                    reply_markup=markup)
+    make_card_data[message.chat.id]['sent_message'] = sent_message
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'show_thanks')
+@authorized_only(user_type='users')
+def show_thanks(call):
+    week_thanks_button = types.InlineKeyboardButton(text='📅 За тиждень', callback_data='week_thanks')
+    month_thanks_button = types.InlineKeyboardButton(text='📅 За місяць', callback_data='month_thanks')
+    all_thanks_button = types.InlineKeyboardButton(text='📅 Всі', callback_data='all_thanks')
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(week_thanks_button, month_thanks_button, all_thanks_button)
+    bot.edit_message_text('🔍 Оберіть період:', call.message.chat.id, call.message.message_id, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data in ['week_thanks', 'month_thanks', 'all_thanks'])
+@authorized_only(user_type='users')
+def show_thanks_period(call):
+    period = call.data.split('_')[0]
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name, position, commendation_text, commendation_date FROM commendations '
+                       'JOIN employees ON employee_to_id = employees.id ', (call.from_user.id,))
+        commendations = cursor.fetchall()
+    if not commendations:
+        bot.edit_message_text('🔍 Подяк немає.', call.message.chat.id, call.message.message_id)
+        return
+    message_text = '📜 Подяки:\n\n'
+    for employee_name, employee_position, commendation_text, commendation_date in commendations:
+        formatted_date = commendation_date.strftime('%d.%m.%Y')
+        message_text += (f'👨‍💻 <b>{employee_name}</b> - {employee_position}\n'
+                         f'📅 {formatted_date}\n'
+                         f'📝 {commendation_text}\n\n')
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='show_thanks')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(back_btn)
+    bot.edit_message_text(message_text, call.message.chat.id, call.message.message_id, parse_mode='HTML',
+                          reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'send_thanks')
+@authorized_only(user_type='users')
+def send_thanks(call):
+    process_in_progress[call.message.chat.id] = 'thanks_search'
+    sent_message = make_card_data[call.message.chat.id]['sent_message']
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn)
+    sent_message = bot.edit_message_text('📝 Введіть ім\'я співробітника для пошуку:',
+                                         call.message.chat.id, sent_message.message_id, reply_markup=markup)
+    make_card_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'thanks_search')
+@authorized_only(user_type='users')
+def proceed_thanks_search(message):
+    search_query = message.text
+    found_contacts = find_contact_by_name(search_query)
+    sent_message = make_card_data[message.chat.id]['sent_message']
+    if found_contacts:
+        markup = types.InlineKeyboardMarkup(row_width=1)
+
+        for employee_info in found_contacts:
+            employee_id = employee_info[0]
+            employee_name = employee_info[1]
+            employee_position = employee_info[2]
+
+            formatted_name = employee_name.split()
+            formatted_name = f'{formatted_name[0]} {formatted_name[1]}'
+            btn = types.InlineKeyboardButton(text=f'👨‍💻 {formatted_name} - {employee_position}',
+                                             callback_data=f'thanks_{employee_id}')
+            markup.add(btn)
+        cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
+        markup.add(cancel_btn)
+        bot.delete_message(message.chat.id, message.message_id)
+        sent_message = bot.edit_message_text('🔍 Оберіть співробітника:', message.chat.id, sent_message.message_id,
+                                             reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('thanks_'))
+@authorized_only(user_type='users')
+def proceed_send_thanks(call):
+    employee_id = int(call.data.split('_')[1])
+    process_in_progress[call.message.chat.id] = 'send_thanks'
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name, position, telegram_user_id FROM employees WHERE id = %s', (employee_id,))
+        employee_data = cursor.fetchone()
+    employee_name = employee_data[0]
+    employee_position = employee_data[1]
+    employee_telegram_id = employee_data[2]
+    make_card_data[call.message.chat.id]['employee_id'] = employee_id
+    make_card_data[call.message.chat.id]['employee_position'] = employee_position
+    make_card_data[call.message.chat.id]['employee_telegram_id'] = employee_telegram_id
+    sent_message = bot.edit_message_text(
+        f'📝 Введіть ім\'я для співробітника <b>{employee_name}</b> у давальному відмінку:',
+        call.message.chat.id, call.message.message_id, parse_mode='HTML')
+    make_card_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'send_thanks')
+@authorized_only(user_type='users')
+def send_thanks_name(message):
+    if not make_card_data[message.chat.id].get('employee_name'):
+        make_card_data[message.chat.id]['employee_name'] = message.text
+        sent_message = make_card_data[message.chat.id]['sent_message']
+        bot.delete_message(message.chat.id, message.message_id)
+        bot.edit_message_text('📝 Введіть текст подяки:', message.chat.id, sent_message.message_id)
+
+    elif not make_card_data[message.chat.id].get('thanks_text'):
+        make_card_data[message.chat.id]['thanks_text'] = message.text
+        sent_message = make_card_data[message.chat.id]['sent_message']
+        bot.delete_message(message.chat.id, message.message_id)
+        bot.delete_message(message.chat.id, sent_message.message_id)
+        image = make_card(make_card_data[message.chat.id]['employee_name'],
+                          make_card_data[message.chat.id]['employee_position'],
+                          make_card_data[message.chat.id]['thanks_text'])
+        make_card_data[message.chat.id]['image'] = image
+        bot.send_photo(make_card_data[message.chat.id]['employee_telegram_id'], image, caption='📩 Вам'
+                                                                                               ' надіслано подяку.')
+        bot.send_photo(message.chat.id, image, caption='✅ Подяку надіслано.')
+
+        employee_id = make_card_data[message.chat.id]['employee_id']
+        commendation_text = make_card_data[message.chat.id]['thanks_text']
+        commendation_date = datetime.now().date()
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (message.from_user.id,))
+            sender_id = cursor.fetchone()[0]
+            cursor.execute(
+                'INSERT INTO commendations (employee_to_id, employee_from_id, commendation_text, commendation_date) '
+                'VALUES (%s, %s, %s, %s)',
+                (employee_id, sender_id, commendation_text, commendation_date)
+            )
+            conn.commit()
+
+        del make_card_data[message.chat.id]
+        del process_in_progress[message.chat.id]
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'cancel_send_thanks')
+@authorized_only(user_type='users')
+def cancel_send_thanks(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, '🚪 Створення подяки скасовано.')
+    del make_card_data[call.message.chat.id]
+    del process_in_progress[call.message.chat.id]
 
 
 @bot.message_handler(func=lambda message: message.text == '💭 Зауваження по роботі боту')

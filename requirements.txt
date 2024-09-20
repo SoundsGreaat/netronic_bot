@@ -5,3 +5,5 @@ fake-useragent~=1.4.0
 Telethon~=1.34.0
 pyTelegramBotAPI~=4.16.1
 openai~=1.13.3
+pillow~=10.4.0
+pandas~=2.2.2
