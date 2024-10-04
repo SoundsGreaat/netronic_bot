@@ -3,7 +3,7 @@ import re
 import threading
 import asyncio
 import time
-from datetime import datetime
+import datetime
 
 import gforms
 
@@ -1383,22 +1383,41 @@ def show_thanks(call):
 @authorized_only(user_type='users')
 def show_thanks_period(call):
     period = call.data.split('_')[0]
+    today = datetime.date.today()
+
+    if period == 'week':
+        start_date = today - datetime.timedelta(days=7)
+    elif period == 'month':
+        start_date = today.replace(day=1)
+    else:
+        start_date = None
+
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name, position, commendation_text, commendation_date FROM commendations '
-                       'JOIN employees ON employee_to_id = employees.id ', (call.from_user.id,))
+        if start_date:
+            cursor.execute('SELECT name, position, commendation_text, commendation_date FROM commendations '
+                           'JOIN employees ON employee_to_id = employees.id '
+                           'WHERE commendation_date >= %s', (start_date,))
+        else:
+            cursor.execute('SELECT name, position, commendation_text, commendation_date FROM commendations '
+                           'JOIN employees ON employee_to_id = employees.id')
         commendations = cursor.fetchall()
+
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='show_thanks')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(back_btn)
+
     if not commendations:
-        bot.edit_message_text('🔍 Подяк немає.', call.message.chat.id, call.message.message_id)
+        bot.edit_message_text('🔍 Подяк немає.', call.message.chat.id, call.message.message_id,
+                              reply_markup=markup)
         return
+
     message_text = '📜 Подяки:\n\n'
     for employee_name, employee_position, commendation_text, commendation_date in commendations:
         formatted_date = commendation_date.strftime('%d.%m.%Y')
         message_text += (f'👨‍💻 <b>{employee_name}</b> - {employee_position}\n'
                          f'📅 {formatted_date}\n'
-                         f'📝 {commendation_text}\n\n')
-    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='show_thanks')
-    markup = types.InlineKeyboardMarkup()
-    markup.add(back_btn)
+                         f'💬 {commendation_text}\n\n')
+
     bot.edit_message_text(message_text, call.message.chat.id, call.message.message_id, parse_mode='HTML',
                           reply_markup=markup)
 
@@ -1488,7 +1507,7 @@ def send_thanks_name(message):
 
         employee_id = make_card_data[message.chat.id]['employee_id']
         commendation_text = make_card_data[message.chat.id]['thanks_text']
-        commendation_date = datetime.now().date()
+        commendation_date = datetime.datetime.now().date()
         with DatabaseConnection() as (conn, cursor):
             cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (message.from_user.id,))
             sender_id = cursor.fetchone()[0]
