@@ -670,7 +670,8 @@ def add_employee(call):
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'add_employee')
 @authorized_only(user_type='admins')
-def proceed_add_employee_data(message, delete_user_message=True, skip_phone=False, skip_email=False):
+def proceed_add_employee_data(message, delete_user_message=True, skip_phone=False, skip_email=False,
+                              skip_username=False):
     finish_function = False
     department_id = add_employee_data[message.chat.id]['department_id']
     sub_department_id = add_employee_data[message.chat.id]['sub_department_id']
@@ -720,33 +721,42 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
     elif not add_employee_data[message.chat.id].get('position'):
         add_employee_data[message.chat.id]['position'] = message.text
         message_text = '🆔 Введіть юзернейм нового співробітника:'
+        if add_employee_data[message.chat.id].get('position'):
+            skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_username')
 
-    else:
-        if message.text.startswith('@'):
-            add_employee_data[message.chat.id]['telegram_username'] = message.text
+    elif not add_employee_data[message.chat.id].get('telegram_username'):
+        if skip_username:
+            add_employee_data[message.chat.id]['telegram_username'] = 'skip'
         else:
-            add_employee_data[message.chat.id]['telegram_username'] = f'@{message.text}'
+            if message.text.startswith('@'):
+                add_employee_data[message.chat.id]['telegram_username'] = message.text
+            else:
+                add_employee_data[message.chat.id]['telegram_username'] = f'@{message.text}'
 
-        searching_message = bot.send_message(message.chat.id, '🔄 Пошук користувача в Telegram...')
-        add_employee_data[message.chat.id]['telegram_user_id'] = asyncio.run(
-            proceed_find_user_id(add_employee_data[message.chat.id]['telegram_username']))
-        if add_employee_data[message.chat.id]['telegram_user_id'] is not None:
-            bot.delete_message(message.chat.id, searching_message.message_id)
-        else:
-            sent_message = bot.edit_message_text(
-                '🚫 Користувач не знайдений. Перевірте правильність введеного юзернейму та спробуйте ще раз.',
-                message.chat.id, searching_message.message_id)
-            saved_message = add_employee_data[message.chat.id]['saved_message']
-            bot.delete_message(message.chat.id, saved_message.message_id)
-            bot.delete_message(message.chat.id, message.message_id)
-            add_employee_data[message.chat.id]['saved_message'] = sent_message
-            return
+            searching_message = bot.send_message(message.chat.id, '🔄 Пошук користувача в Telegram...')
+            add_employee_data[message.chat.id]['telegram_user_id'] = asyncio.run(
+                proceed_find_user_id(add_employee_data[message.chat.id]['telegram_username']))
+            if add_employee_data[message.chat.id]['telegram_user_id'] is not None:
+                bot.delete_message(message.chat.id, searching_message.message_id)
+            else:
+                sent_message = bot.edit_message_text(
+                    '🚫 Користувач не знайдений. Перевірте правильність введеного юзернейму та спробуйте ще раз.',
+                    message.chat.id, searching_message.message_id)
+                saved_message = add_employee_data[message.chat.id]['saved_message']
+                bot.delete_message(message.chat.id, saved_message.message_id)
+                bot.delete_message(message.chat.id, message.message_id)
+                add_employee_data[message.chat.id]['saved_message'] = sent_message
+                return
 
         if add_employee_data[message.chat.id]['phone'] == 'skip':
             add_employee_data[message.chat.id]['phone'] = None
 
         if add_employee_data[message.chat.id]['email'] == 'skip':
             add_employee_data[message.chat.id]['email'] = None
+
+        if add_employee_data[message.chat.id]['telegram_username'] == 'skip':
+            add_employee_data[message.chat.id]['telegram_username'] = None
+            add_employee_data[message.chat.id]['telegram_user_id'] = None
 
         with DatabaseConnection() as (conn, cursor):
             cursor.execute(
@@ -798,6 +808,12 @@ def skip_phone(call):
 @authorized_only(user_type='admins')
 def skip_email(call):
     proceed_add_employee_data(call.message, delete_user_message=False, skip_email=True)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'skip_username')
+@authorized_only(user_type='admins')
+def skip_username(call):
+    proceed_add_employee_data(call.message, delete_user_message=False, skip_username=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('profile_'))
