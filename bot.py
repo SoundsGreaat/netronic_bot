@@ -10,7 +10,6 @@ import gforms
 from collections import defaultdict
 from time import sleep
 
-import psycopg2
 from telebot import TeleBot, types, apihelper
 from openai import OpenAI
 
@@ -1375,55 +1374,90 @@ def thanks_menu(message):
 @bot.callback_query_handler(func=lambda call: call.data == 'show_thanks')
 @authorized_only(user_type='moderators')
 def show_thanks(call):
-    week_thanks_button = types.InlineKeyboardButton(text='📅 За тиждень', callback_data='week_thanks')
-    month_thanks_button = types.InlineKeyboardButton(text='📅 За місяць', callback_data='month_thanks')
-    all_thanks_button = types.InlineKeyboardButton(text='📅 Всі', callback_data='all_thanks')
+    week_thanks_button = types.InlineKeyboardButton(text='📅 За тиждень', callback_data='time_thanks_week')
+    month_thanks_button = types.InlineKeyboardButton(text='📅 За місяць', callback_data='time_thanks_month')
+    year_thanks_button = types.InlineKeyboardButton(text='📅 За рік', callback_data='time_thanks_year')
+    all_thanks_button = types.InlineKeyboardButton(text='📅 Всі', callback_data='time_thanks_all')
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(week_thanks_button, month_thanks_button, all_thanks_button)
+    markup.add(week_thanks_button, month_thanks_button, year_thanks_button, all_thanks_button)
     bot.edit_message_text('🔍 Оберіть період:', call.message.chat.id, call.message.message_id, reply_markup=markup)
 
 
-@bot.callback_query_handler(func=lambda call: call.data in ['week_thanks', 'month_thanks', 'all_thanks'])
+@bot.callback_query_handler(func=lambda call: call.data.startswith('time_thanks_'))
 @authorized_only(user_type='moderators')
 def show_thanks_period(call):
-    period = call.data.split('_')[0]
+    period = call.data.split('_')[2]
     today = datetime.date.today()
 
     if period == 'week':
         start_date = today - datetime.timedelta(days=7)
     elif period == 'month':
         start_date = today.replace(day=1)
+    elif period == 'year':
+        start_date = today.replace(day=1, month=1)
     else:
         start_date = None
 
     with DatabaseConnection() as (conn, cursor):
         if start_date:
-            cursor.execute('SELECT name, position, commendation_text, commendation_date FROM commendations '
-                           'JOIN employees ON employee_to_id = employees.id '
-                           'WHERE commendation_date >= %s', (start_date,))
+            cursor.execute(
+                'SELECT commendations.id, name, commendations.position, commendation_text, commendation_date FROM commendations '
+                'JOIN employees ON employee_to_id = employees.id '
+                'WHERE commendation_date >= %s', (start_date,)
+            )
         else:
-            cursor.execute('SELECT name, position, commendation_text, commendation_date FROM commendations '
-                           'JOIN employees ON employee_to_id = employees.id')
+            cursor.execute(
+                'SELECT commendations.id, name, commendations.position, commendation_text, commendation_date FROM commendations '
+                'JOIN employees ON employee_to_id = employees.id'
+            )
         commendations = cursor.fetchall()
 
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='show_thanks')
     markup = types.InlineKeyboardMarkup()
-    markup.add(back_btn)
 
     if not commendations:
+        markup.add(back_btn)
         bot.edit_message_text('🔍 Подяк немає.', call.message.chat.id, call.message.message_id,
                               reply_markup=markup)
         return
 
-    message_text = '📜 Подяки:\n\n'
-    for employee_name, employee_position, commendation_text, commendation_date in commendations:
+    for commendation in commendations:
+        commendation_id, employee_name, employee_position, _, commendation_date = commendation
         formatted_date = commendation_date.strftime('%d.%m.%Y')
-        message_text += (f'👨‍💻 <b>{employee_name}</b> - {employee_position}\n'
-                         f'📅 {formatted_date}\n'
-                         f'💬 {commendation_text}\n\n')
+        split_name = employee_name.split()
+        formatted_name = f'{split_name[0]} {split_name[1][0]}'
+        button_text = f'👨‍💻 {formatted_name} - {employee_position} | {formatted_date}'
+        markup.add(types.InlineKeyboardButton(text=button_text, callback_data=f'commendation_{commendation_id}'))
 
-    bot.edit_message_text(message_text, call.message.chat.id, call.message.message_id, parse_mode='HTML',
-                          reply_markup=markup)
+    markup.add(back_btn)
+    bot.edit_message_text('📜 Подяки:', call.message.chat.id, call.message.message_id, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('commendation_'))
+@authorized_only(user_type='moderators')
+def show_commendation(call):
+    commendation_id = int(call.data.split('_')[1])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute(
+            'SELECT name, commendations.position, commendation_text, commendation_date, employees.name FROM commendations '
+            'JOIN employees ON employee_to_id = employees.id '
+            'WHERE commendations.id = %s', (commendation_id,)
+        )
+        employee_name, employee_position, commendation_text, commendation_date, employee_name = cursor.fetchone()
+
+    formatted_date = commendation_date.strftime('%d.%m.%Y')
+    image = make_card(employee_name, employee_position, commendation_text)
+    message_text = f'👨‍💻 <b>{employee_name}</b> | {formatted_date}\n\nВід <b>{employee_name}</b>\n{commendation_text}'
+    hide_btn = types.InlineKeyboardButton(text='❌ Сховати', callback_data='hide_message')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(hide_btn)
+    bot.send_photo(call.message.chat.id, image, caption=message_text, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'hide_message')
+@authorized_only(user_type='users')
+def hide_message(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'send_thanks')
@@ -1489,7 +1523,9 @@ def proceed_send_thanks(call):
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'send_thanks')
 @authorized_only(user_type='moderators')
-def send_thanks_name(message):
+def send_thanks_name(message, position_changed=False):
+    data_filled = False
+
     if not make_card_data[message.chat.id].get('employee_name'):
         make_card_data[message.chat.id]['employee_name'] = message.text
         sent_message = make_card_data[message.chat.id]['sent_message']
@@ -1501,6 +1537,9 @@ def send_thanks_name(message):
         sent_message = make_card_data[message.chat.id]['sent_message']
         bot.delete_message(message.chat.id, message.message_id)
         bot.delete_message(message.chat.id, sent_message.message_id)
+        data_filled = True
+
+    if data_filled or position_changed:
         image = make_card(make_card_data[message.chat.id]['employee_name'],
                           make_card_data[message.chat.id]['employee_position'],
                           make_card_data[message.chat.id]['thanks_text'])
@@ -1508,8 +1547,9 @@ def send_thanks_name(message):
 
         markup = types.InlineKeyboardMarkup(row_width=2)
         confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити', callback_data='confirm_send_thanks')
+        position_change_btn = types.InlineKeyboardButton(text='🔄 Змінити посаду', callback_data='com_change_position')
         cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
-        markup.add(confirm_btn, cancel_btn)
+        markup.add(confirm_btn, cancel_btn, position_change_btn)
 
         bot.send_photo(message.chat.id, image, caption='📝 Перевірте подяку:', reply_markup=markup)
 
@@ -1522,17 +1562,16 @@ def confirm_send_thanks(call):
 
     employee_id = make_card_data[call.message.chat.id]['employee_id']
     commendation_text = make_card_data[call.message.chat.id]['thanks_text']
+    employee_position = make_card_data[call.message.chat.id]['employee_position']
     commendation_date = datetime.datetime.now().date()
-
-    image_binary = image.tobytes()
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (call.message.chat.id,))
         sender_id = cursor.fetchone()[0]
         cursor.execute(
-            'INSERT INTO commendations (employee_to_id, employee_from_id, commendation_text, commendation_date, image) '
+            'INSERT INTO commendations (employee_to_id, employee_from_id, commendation_text, commendation_date, position) '
             'VALUES (%s, %s, %s, %s, %s)',
-            (employee_id, sender_id, commendation_text, commendation_date, psycopg2.Binary(image_binary))
+            (employee_id, sender_id, commendation_text, commendation_date, employee_position)
         )
         conn.commit()
 
@@ -1540,7 +1579,31 @@ def confirm_send_thanks(call):
     bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
 
     del make_card_data[call.message.chat.id]
-    del process_in_progress[call.message.chat.id]
+    if process_in_progress.get(call.message.chat.id):
+        del process_in_progress[call.message.chat.id]
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'com_change_position')
+@authorized_only(user_type='moderators')
+def com_change_position(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    process_in_progress[call.message.chat.id] = 'com_change_position'
+    sent_message = bot.send_message(call.message.chat.id, '💼 Введіть нову посаду:')
+    make_card_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'com_change_position')
+@authorized_only(user_type='moderators')
+def com_change_position_ans(message):
+    make_card_data[message.chat.id]['employee_position'] = message.text
+    sent_message = make_card_data[message.chat.id]['sent_message']
+    bot.delete_message(message.chat.id, message.message_id)
+    bot.delete_message(message.chat.id, sent_message.message_id)
+
+    del process_in_progress[message.chat.id]
+
+    send_thanks_name(message, position_changed=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel_send_thanks')
