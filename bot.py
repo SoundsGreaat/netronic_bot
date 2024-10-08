@@ -22,6 +22,7 @@ from make_card import make_card
 authorized_ids = {
     'users': set(),
     'admins': set(),
+    'moderators': set(),
     'temp_users': set(),
 }
 
@@ -62,7 +63,8 @@ def authorized_only(user_type):
             except AttributeError:
                 chat_id = data.from_user.id
 
-            if chat_id in authorized_ids[user_type] or chat_id in authorized_ids['temp_users'] and user_type == 'users':
+            if (chat_id in authorized_ids[user_type] or chat_id in authorized_ids['temp_users'] and user_type == 'users'
+                    or chat_id in authorized_ids['admins']):
                 func(data, *args, **kwargs)
                 print(f'User @{data.from_user.username} accessed {func.__name__}')
             else:
@@ -1359,7 +1361,7 @@ def back_to_send_contacts_menu(call):
 
 
 @bot.message_handler(func=lambda message: message.text == '📜 Меню подяк')
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def thanks_menu(message):
     show_thanks_button = types.InlineKeyboardButton(text='🔍 Передивитись подяки', callback_data='show_thanks')
     send_thanks_button = types.InlineKeyboardButton(text='📜 Надіслати подяку', callback_data='send_thanks')
@@ -1371,7 +1373,7 @@ def thanks_menu(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'show_thanks')
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def show_thanks(call):
     week_thanks_button = types.InlineKeyboardButton(text='📅 За тиждень', callback_data='week_thanks')
     month_thanks_button = types.InlineKeyboardButton(text='📅 За місяць', callback_data='month_thanks')
@@ -1382,7 +1384,7 @@ def show_thanks(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data in ['week_thanks', 'month_thanks', 'all_thanks'])
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def show_thanks_period(call):
     period = call.data.split('_')[0]
     today = datetime.date.today()
@@ -1425,7 +1427,7 @@ def show_thanks_period(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'send_thanks')
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def send_thanks(call):
     process_in_progress[call.message.chat.id] = 'thanks_search'
     sent_message = make_card_data[call.message.chat.id]['sent_message']
@@ -1439,7 +1441,7 @@ def send_thanks(call):
 
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'thanks_search')
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def proceed_thanks_search(message):
     search_query = message.text
     found_contacts = find_contact_by_name(search_query)
@@ -1465,7 +1467,7 @@ def proceed_thanks_search(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('thanks_'))
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def proceed_send_thanks(call):
     employee_id = int(call.data.split('_')[1])
     process_in_progress[call.message.chat.id] = 'send_thanks'
@@ -1486,7 +1488,7 @@ def proceed_send_thanks(call):
 
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'send_thanks')
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def send_thanks_name(message):
     if not make_card_data[message.chat.id].get('employee_name'):
         make_card_data[message.chat.id]['employee_name'] = message.text
@@ -1513,7 +1515,7 @@ def send_thanks_name(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'confirm_send_thanks')
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def confirm_send_thanks(call):
     recipient_id = make_card_data[call.message.chat.id]['employee_telegram_id']
     image = make_card_data[call.message.chat.id]['image']
@@ -1542,7 +1544,7 @@ def confirm_send_thanks(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel_send_thanks')
-@authorized_only(user_type='admins')
+@authorized_only(user_type='moderators')
 def cancel_send_thanks(call):
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(call.message.chat.id, '🚪 Створення подяки скасовано.')

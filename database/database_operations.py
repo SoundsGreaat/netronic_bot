@@ -26,6 +26,13 @@ def update_authorized_users(authorized_ids: dict):
         cursor_result = cursor.fetchall()
         authorized_ids['admins'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
 
+        cursor.execute('''SELECT employees.telegram_user_id, employees.name
+            FROM moderators
+            JOIN employees ON moderators.employee_id = employees.id
+        ''')
+        cursor_result = cursor.fetchall()
+        authorized_ids['moderators'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
+
         print(f'List of authorized users updated.'
               f'\nAuthorized users: {authorized_ids["users"]}'
               f'\nAuthorized admins: {authorized_ids["admins"]}')
