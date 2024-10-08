@@ -43,7 +43,7 @@ def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=Fals
 
 
 def make_card(name, position, thank_you_text):
-    image_path = 'photo_2024-07-15_14-00-51.png'
+    image_path = 'commendation_template.png'
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
     draw_text(draw, 'ПОДЯКА', 68, (585, 115), (106, 157, 246), True)
