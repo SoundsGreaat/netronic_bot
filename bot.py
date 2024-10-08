@@ -9,6 +9,8 @@ import gforms
 
 from collections import defaultdict
 from time import sleep
+
+import psycopg2
 from telebot import TeleBot, types, apihelper
 from openai import OpenAI
 
@@ -1357,7 +1359,7 @@ def back_to_send_contacts_menu(call):
 
 
 @bot.message_handler(func=lambda message: message.text == '📜 Меню подяк')
-@authorized_only(user_type='users')
+@authorized_only(user_type='admins')
 def thanks_menu(message):
     show_thanks_button = types.InlineKeyboardButton(text='🔍 Передивитись подяки', callback_data='show_thanks')
     send_thanks_button = types.InlineKeyboardButton(text='📜 Надіслати подяку', callback_data='send_thanks')
@@ -1369,7 +1371,7 @@ def thanks_menu(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'show_thanks')
-@authorized_only(user_type='users')
+@authorized_only(user_type='admins')
 def show_thanks(call):
     week_thanks_button = types.InlineKeyboardButton(text='📅 За тиждень', callback_data='week_thanks')
     month_thanks_button = types.InlineKeyboardButton(text='📅 За місяць', callback_data='month_thanks')
@@ -1380,7 +1382,7 @@ def show_thanks(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data in ['week_thanks', 'month_thanks', 'all_thanks'])
-@authorized_only(user_type='users')
+@authorized_only(user_type='admins')
 def show_thanks_period(call):
     period = call.data.split('_')[0]
     today = datetime.date.today()
@@ -1423,7 +1425,7 @@ def show_thanks_period(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'send_thanks')
-@authorized_only(user_type='users')
+@authorized_only(user_type='admins')
 def send_thanks(call):
     process_in_progress[call.message.chat.id] = 'thanks_search'
     sent_message = make_card_data[call.message.chat.id]['sent_message']
@@ -1437,7 +1439,7 @@ def send_thanks(call):
 
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'thanks_search')
-@authorized_only(user_type='users')
+@authorized_only(user_type='admins')
 def proceed_thanks_search(message):
     search_query = message.text
     found_contacts = find_contact_by_name(search_query)
@@ -1463,7 +1465,7 @@ def proceed_thanks_search(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('thanks_'))
-@authorized_only(user_type='users')
+@authorized_only(user_type='admins')
 def proceed_send_thanks(call):
     employee_id = int(call.data.split('_')[1])
     process_in_progress[call.message.chat.id] = 'send_thanks'
@@ -1484,7 +1486,7 @@ def proceed_send_thanks(call):
 
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'send_thanks')
-@authorized_only(user_type='users')
+@authorized_only(user_type='admins')
 def send_thanks_name(message):
     if not make_card_data[message.chat.id].get('employee_name'):
         make_card_data[message.chat.id]['employee_name'] = message.text
@@ -1501,29 +1503,46 @@ def send_thanks_name(message):
                           make_card_data[message.chat.id]['employee_position'],
                           make_card_data[message.chat.id]['thanks_text'])
         make_card_data[message.chat.id]['image'] = image
-        bot.send_photo(make_card_data[message.chat.id]['employee_telegram_id'], image, caption='📩 Вам'
-                                                                                               ' надіслано подяку.')
-        bot.send_photo(message.chat.id, image, caption='✅ Подяку надіслано.')
 
-        employee_id = make_card_data[message.chat.id]['employee_id']
-        commendation_text = make_card_data[message.chat.id]['thanks_text']
-        commendation_date = datetime.datetime.now().date()
-        with DatabaseConnection() as (conn, cursor):
-            cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (message.from_user.id,))
-            sender_id = cursor.fetchone()[0]
-            cursor.execute(
-                'INSERT INTO commendations (employee_to_id, employee_from_id, commendation_text, commendation_date) '
-                'VALUES (%s, %s, %s, %s)',
-                (employee_id, sender_id, commendation_text, commendation_date)
-            )
-            conn.commit()
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити', callback_data='confirm_send_thanks')
+        cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
+        markup.add(confirm_btn, cancel_btn)
 
-        del make_card_data[message.chat.id]
-        del process_in_progress[message.chat.id]
+        bot.send_photo(message.chat.id, image, caption='📝 Перевірте подяку:', reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'confirm_send_thanks')
+@authorized_only(user_type='admins')
+def confirm_send_thanks(call):
+    recipient_id = make_card_data[call.message.chat.id]['employee_telegram_id']
+    image = make_card_data[call.message.chat.id]['image']
+
+    employee_id = make_card_data[call.message.chat.id]['employee_id']
+    commendation_text = make_card_data[call.message.chat.id]['thanks_text']
+    commendation_date = datetime.datetime.now().date()
+
+    image_binary = image.tobytes()
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (call.message.chat.id,))
+        sender_id = cursor.fetchone()[0]
+        cursor.execute(
+            'INSERT INTO commendations (employee_to_id, employee_from_id, commendation_text, commendation_date, image) '
+            'VALUES (%s, %s, %s, %s, %s)',
+            (employee_id, sender_id, commendation_text, commendation_date, psycopg2.Binary(image_binary))
+        )
+        conn.commit()
+
+    bot.send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.')
+    bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
+
+    del make_card_data[call.message.chat.id]
+    del process_in_progress[call.message.chat.id]
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel_send_thanks')
-@authorized_only(user_type='users')
+@authorized_only(user_type='admins')
 def cancel_send_thanks(call):
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(call.message.chat.id, '🚪 Створення подяки скасовано.')
