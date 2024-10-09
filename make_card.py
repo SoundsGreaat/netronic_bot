@@ -3,7 +3,7 @@ from datetime import datetime
 
 
 def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=False):
-    font_path = 'arialbd.ttf' if bold else 'arial.ttf'
+    font_path = 'fonts/ARIALBD.TTF' if bold else 'fonts/ARIAL.TTF'
     font = ImageFont.truetype(font_path, font_size)
 
     def split_text(text, font, max_width):
