@@ -1,5 +1,7 @@
 /.idea
 /docker-compose.yaml
-/database/create_departments_and_employees.sql
+/temp_files/create_departments_and_employees.sql
 /find_user_id.session
-/temp.py
+/userbot_session.session
+/temp_files/
+/bot_session.session

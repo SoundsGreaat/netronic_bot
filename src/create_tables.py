@@ -1,4 +1,4 @@
-from database import DatabaseConnection
+from src.database import DatabaseConnection
 
 with DatabaseConnection() as (conn, cursor):
     with open('database/create_tables.sql', 'r') as file:
