@@ -15,26 +15,17 @@ token = os.environ.get('NETRONIC_BOT_TOKEN')
 fernet_key = os.environ.get('FERNET_KEY')
 
 
-def encrypt_session(key):
+def decrypt_session(key, input_file, output_file):
     fernet = Fernet(key)
-    with open('send_message.session', 'rb') as file:
-        session = file.read()
-    encrypted_session = fernet.encrypt(session)
-    with open('send_message_session_encrypted', 'wb') as file:
-        file.write(encrypted_session)
-
-
-def decrypt_session(key):
-    fernet = Fernet(key)
-    with open('send_message_session_encrypted', 'rb') as file:
+    with open(input_file, 'rb') as file:
         encrypted_session = file.read()
     session = fernet.decrypt(encrypted_session)
-    with open('send_message.session', 'wb') as file:
+    with open(output_file, 'wb') as file:
         file.write(session)
 
 
 async def proceed_find_user_id(username):
-    client = TelegramClient('find_user_id', api_id, api_hash)
+    client = TelegramClient('bot_session', api_id, api_hash)
     await client.start(bot_token=token)
     print(await client.get_me())
     try:
@@ -49,7 +40,7 @@ async def proceed_find_user_id(username):
 
 
 async def send_message(user_id, message):
-    client = TelegramClient('send_message', api_id_userbot, api_hash_userbot)
+    client = TelegramClient('userbot_session', api_id_userbot, api_hash_userbot)
     await client.start()
     try:
         async with client:
@@ -61,7 +52,7 @@ async def send_message(user_id, message):
 
 
 async def send_photo(user_id, image, caption):
-    client = TelegramClient('send_message', api_id_userbot, api_hash_userbot)
+    client = TelegramClient('userbot_session', api_id_userbot, api_hash_userbot)
     await client.start()
 
     root_dir = Path(__file__).parent

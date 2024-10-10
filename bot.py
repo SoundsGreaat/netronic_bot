@@ -13,10 +13,10 @@ from time import sleep
 from telebot import TeleBot, types, apihelper
 from openai import OpenAI
 
-from google_forms_filler import FormFiller
-from database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
-from telethon_functions import proceed_find_user_id, send_photo, decrypt_session
-from make_card import make_card
+from src.google_forms_filler import FormFiller
+from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
+from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session
+from src.make_card import make_card
 
 authorized_ids = {
     'users': set(),
@@ -139,7 +139,7 @@ assistant_id = os.getenv('OPENAI_ASSISTANT_ID')
 bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
 
 fernet_key = os.environ.get('FERNET_KEY')
-decrypt_session(fernet_key)
+decrypt_session(fernet_key, input_file='userbot_session_encrypted', output_file='userbot_session.session')
 
 main_menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
@@ -165,7 +165,7 @@ def send_main_menu(message):
         employee_name = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
-    with open('netronic_logo.png', 'rb') as photo:
+    with open('../assets/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
                                f'<b>Netronic</b>.'
@@ -1445,7 +1445,7 @@ def show_thanks_period(call):
         formatted_date = commendation_date.strftime('%d.%m.%Y')
         split_name = employee_name.split()
         formatted_name = f'{split_name[0]} {split_name[1][0]}'
-        button_text = f'👨‍💻 {formatted_name} - {employee_position} | {formatted_date}'
+        button_text = f'👨‍💻 {formatted_name} | {formatted_date}'
         markup.add(types.InlineKeyboardButton(text=button_text, callback_data=f'commendation_{commendation_id}'))
 
     markup.add(back_btn)
