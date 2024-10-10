@@ -139,7 +139,7 @@ assistant_id = os.getenv('OPENAI_ASSISTANT_ID')
 bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
 
 fernet_key = os.environ.get('FERNET_KEY')
-decrypt_session(fernet_key, input_file='userbot_session_encrypted', output_file='userbot_session.session')
+decrypt_session(fernet_key, input_file='src/userbot_session_encrypted', output_file='userbot_session.session')
 
 main_menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
@@ -165,7 +165,7 @@ def send_main_menu(message):
         employee_name = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
-    with open('../assets/netronic_logo.png', 'rb') as photo:
+    with open('./assets/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
                                f'<b>Netronic</b>.'
