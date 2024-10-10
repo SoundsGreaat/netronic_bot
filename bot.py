@@ -15,7 +15,7 @@ from openai import OpenAI
 
 from google_forms_filler import FormFiller
 from database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
-from telegram_user_id_search import proceed_find_user_id
+from telethon_functions import proceed_find_user_id, send_photo, decrypt_session
 from make_card import make_card
 
 authorized_ids = {
@@ -137,6 +137,9 @@ def delete_messages(chat_id, dict_key='messages_to_delete'):
 client = OpenAI()
 assistant_id = os.getenv('OPENAI_ASSISTANT_ID')
 bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
+
+fernet_key = os.environ.get('FERNET_KEY')
+decrypt_session(fernet_key)
 
 main_menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
@@ -1455,15 +1458,17 @@ def show_commendation(call):
     commendation_id = int(call.data.split('_')[1])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
-            'SELECT name, commendations.position, commendation_text, commendation_date, employees.name FROM commendations '
-            'JOIN employees ON employee_to_id = employees.id '
+            'SELECT e_to.name, commendations.position, commendation_text, commendation_date, e_from.name FROM commendations '
+            'JOIN employees e_to ON employee_to_id = e_to.id '
+            'JOIN employees e_from ON employee_from_id = e_from.id '
             'WHERE commendations.id = %s', (commendation_id,)
         )
-        employee_name, employee_position, commendation_text, commendation_date, employee_name = cursor.fetchone()
+        employee_name, employee_position, commendation_text, commendation_date, employee_from_name = cursor.fetchone()
 
     formatted_date = commendation_date.strftime('%d.%m.%Y')
     image = make_card(employee_name, employee_position, commendation_text)
-    message_text = f'👨‍💻 <b>{employee_name}</b> | {formatted_date}\n\nВід <b>{employee_name}</b>\n{commendation_text}'
+    message_text = (f'👨‍💻 <b>{employee_name}</b> | {formatted_date}\n\nВід <b>{employee_from_name}</b>'
+                    f'\n{commendation_text}')
     hide_btn = types.InlineKeyboardButton(text='❌ Сховати', callback_data='hide_message')
     markup = types.InlineKeyboardMarkup()
     markup.add(hide_btn)
@@ -1480,12 +1485,15 @@ def hide_message(call):
 @authorized_only(user_type='moderators')
 def send_thanks(call):
     process_in_progress[call.message.chat.id] = 'thanks_search'
-    sent_message = make_card_data[call.message.chat.id]['sent_message']
+
+    if make_card_data.get(call.message.chat.id):
+        del make_card_data[call.message.chat.id]
+
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
     markup = types.InlineKeyboardMarkup()
     markup.add(cancel_btn)
     sent_message = bot.edit_message_text('📝 Введіть ім\'я співробітника для пошуку:',
-                                         call.message.chat.id, sent_message.message_id, reply_markup=markup)
+                                         call.message.chat.id, call.message.message_id, reply_markup=markup)
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
 
@@ -1567,12 +1575,15 @@ def send_thanks_name(message, position_changed=False):
         cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
         markup.add(confirm_btn, cancel_btn, position_change_btn)
 
-        bot.send_photo(message.chat.id, image, caption='📝 Перевірте подяку:', reply_markup=markup)
+        sent_message = bot.send_photo(message.chat.id, image, caption='📝 Перевірте подяку:', reply_markup=markup)
+        make_card_data[message.chat.id]['sent_message'] = sent_message
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'confirm_send_thanks')
 @authorized_only(user_type='moderators')
 def confirm_send_thanks(call):
+    sent_message = make_card_data[call.message.chat.id]['sent_message']
+    bot.delete_message(call.message.chat.id, sent_message.message_id)
     recipient_id = make_card_data[call.message.chat.id]['employee_telegram_id']
     image = make_card_data[call.message.chat.id]['image']
 
@@ -1591,7 +1602,14 @@ def confirm_send_thanks(call):
         )
         conn.commit()
 
-    bot.send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.')
+    try:
+        bot.send_photo(recipient_id, image, caption='📩 Вам було надіслано подяку.')
+    except apihelper.ApiTelegramException as e:
+        if e.error_code == 400 and "chat not found" in e.description:
+            bot.send_message(call.message.chat.id, '🚫 Користувач не знайдений. Надслисаю подяку як юзербот.')
+            print('Sending image to user failed. Chat not found. Trying to send image as user.')
+            asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.'))
+
     bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
 
     del make_card_data[call.message.chat.id]
