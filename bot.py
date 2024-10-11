@@ -15,7 +15,7 @@ from openai import OpenAI
 
 from src.google_forms_filler import FormFiller
 from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
-from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session
+from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
 from src.make_card import make_card
 
 authorized_ids = {
@@ -74,7 +74,8 @@ def authorized_only(user_type):
                             ''')
                     admin_list = [username[0] for username in cursor.fetchall()]
                 markup = types.ReplyKeyboardRemove()
-                print(f'Unauthorized user @{data.from_user.username} tried to access {func.__name__}')
+                print(
+                    f'Unauthorized user @{data.from_user.username} (chat id: {data.chat.id}) tried to access {func.__name__}')
                 bot.send_message(chat_id, f'Ви не авторизовані для використання цієї функції.'
                                           f'\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.'
                                           f'\n\nСписок адміністраторів: {", ".join(admin_list)}',
@@ -203,6 +204,16 @@ def toggle_admin_mode(message):
 def temp_authorize_user(message):
     process_in_progress[message.chat.id] = 'temp_authorization'
     bot.send_message(message.chat.id, 'Надішліть контакт користувача, якого ви хочете авторизувати.')
+
+
+@bot.message_handler(content_types=['new_chat_members'])
+def new_member_handler(message):
+    for new_member in message.new_chat_members:
+        if new_member.id == bot.get_me().id:
+            with DatabaseConnection() as (conn, cursor):
+                cursor.execute('INSERT INTO telegram_chats (chat_id, chat_name) VALUES (%s, %s) ',
+                               (message.chat.id, message.chat.title))
+                conn.commit()
 
 
 @bot.message_handler(func=lambda message: message.text == '🎓 База знань')
@@ -1358,15 +1369,33 @@ def confirm_delete_employee(call):
     markup.add(back_btn)
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name FROM employees WHERE id = %s', (employee_id,))
-        employee_name = cursor.fetchone()[0]
+        cursor.execute('SELECT name, telegram_user_id FROM employees WHERE id = %s', (employee_id,))
+        employee_name, telegram_user_id = cursor.fetchone()
         cursor.execute('DELETE FROM employees WHERE id = %s', (employee_id,))
         conn.commit()
+        cursor.execute('SELECT chat_id, chat_name from telegram_chats')
+        chats = cursor.fetchall()
 
     print(f'Employee {employee_name} deleted by {call.from_user.username}.')
     update_authorized_users(authorized_ids)
 
-    bot.edit_message_text(f'✅ Контакт <b>{employee_name}</b> видалено.', call.message.chat.id,
+    successful_chats = []
+
+    for chat_id, chat_name in chats:
+        try:
+            remove_user_from_chat(bot, chat_id, telegram_user_id)
+        except Exception as e:
+            print(f'Error while removing user from chat: {e}')
+            continue
+        successful_chats.append(chat_name)
+
+    message = f'✅ Контакт <b>{employee_name}</b> видалено.'
+
+    if successful_chats:
+        chat_list = ', '.join(successful_chats)
+        message += f'\n\nКонтакт також було видалено з чатів: <b>{chat_list}</b>.'
+
+    bot.edit_message_text(message, call.message.chat.id,
                           call.message.message_id, parse_mode='HTML', reply_markup=markup)
 
 
