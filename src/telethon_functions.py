@@ -5,6 +5,7 @@ from pathlib import Path
 import telethon
 import tempfile
 from cryptography.fernet import Fernet
+from telethon import functions
 from telethon.sync import TelegramClient
 
 api_id = int(os.environ.get('TELETHON_API_ID'))
@@ -75,3 +76,17 @@ async def send_photo(user_id, image, caption):
     finally:
         await client.disconnect()
         os.remove(image_path)
+
+
+async def add_user_to_supergroup(group_id, user_ids):
+    client = TelegramClient('userbot_session', api_id_userbot, api_hash_userbot)
+    await client.start()
+    async with client:
+        for user_id in user_ids:
+            await client(functions.channels.InviteToChannelRequest(group_id, [user_id]))
+        await client.disconnect()
+
+
+def remove_user_from_chat(bot, chat_id, user_id):
+    bot.kick_chat_member(chat_id, user_id)
+    bot.unban_chat_member(chat_id, user_id)
