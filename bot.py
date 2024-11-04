@@ -1,3 +1,4 @@
+import math
 import os
 import re
 import threading
@@ -52,6 +53,8 @@ openai_data = defaultdict(dict)
 make_card_data = defaultdict(dict)
 
 process_in_progress = {}
+
+COMMENDATIONS_PER_PAGE = 10
 
 
 def authorized_only(user_type):
@@ -1434,7 +1437,9 @@ def show_thanks(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('time_thanks_'))
 @authorized_only(user_type='moderators')
 def show_thanks_period(call):
-    period = call.data.split('_')[2]
+    data = call.data.split('_')
+    period = data[2]
+    page = int(data[3]) if len(data) > 3 else 1
     today = datetime.date.today()
 
     if period == 'week':
@@ -1469,7 +1474,12 @@ def show_thanks_period(call):
                               reply_markup=markup)
         return
 
-    for commendation in commendations:
+    total_pages = math.ceil(len(commendations) / COMMENDATIONS_PER_PAGE)
+    start_index = (page - 1) * COMMENDATIONS_PER_PAGE
+    end_index = start_index + COMMENDATIONS_PER_PAGE
+    commendations_page = commendations[start_index:end_index]
+
+    for commendation in commendations_page:
         commendation_id, employee_name, employee_position, _, commendation_date = commendation
         formatted_date = commendation_date.strftime('%d.%m.%Y')
         split_name = employee_name.split()
@@ -1477,8 +1487,19 @@ def show_thanks_period(call):
         button_text = f'👨‍💻 {formatted_name} | {formatted_date}'
         markup.add(types.InlineKeyboardButton(text=button_text, callback_data=f'commendation_{commendation_id}'))
 
+    nav_buttons = []
+    if page > 1:
+        nav_buttons.append(
+            types.InlineKeyboardButton(text='⬅️', callback_data=f'time_thanks_{period}_{page - 1}'))
+    if page < total_pages:
+        nav_buttons.append(
+            types.InlineKeyboardButton(text='➡️', callback_data=f'time_thanks_{period}_{page + 1}'))
+    if nav_buttons:
+        markup.row(*nav_buttons)
+
     markup.add(back_btn)
-    bot.edit_message_text('📜 Подяки:', call.message.chat.id, call.message.message_id, reply_markup=markup)
+    bot.edit_message_text(f'📜 Подяки ({page}/{total_pages}):', call.message.chat.id, call.message.message_id,
+                          reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('commendation_'))
