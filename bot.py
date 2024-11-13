@@ -14,6 +14,7 @@ from time import sleep
 from telebot import TeleBot, types, apihelper
 from openai import OpenAI
 
+from src.crm_api_functions import get_employee_pass_from_crm
 from src.google_forms_filler import FormFiller
 from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
 from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
@@ -265,6 +266,8 @@ def send_links(message, link_type, edit_message=False, show_back_btn=False):
     for link_id, link_name, link in links:
         if link.startswith('https://docs.google.com/forms') or user_data['edit_link_mode'].get(message.chat.id):
             btn = types.InlineKeyboardButton(text=link_name, callback_data=f'open_link_{link_id}_{int(show_back_btn)}')
+        elif link == 'https://help.netronic.team/':
+            btn = types.InlineKeyboardButton(text=link_name, callback_data='helpdesk_it')
         else:
             btn = types.InlineKeyboardButton(text=link_name, url=link)
         markup.add(btn)
@@ -375,6 +378,36 @@ def send_form(call):
         bot.edit_message_text(f'❗ Ви у режимі редагування посилань.'
                               f'\nОберіть дію для посилання <b>{link_name}</b>:',
                               call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'helpdesk_it')
+@authorized_only(user_type='users')
+def send_helpdesk(call):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(text='🔗 Перейти до Helpdesk IT', url='https://help.netronic.team/'))
+    markup.add(types.InlineKeyboardButton(text='🔑 Нагадати пароль', callback_data='helpdesk_show_password'))
+    bot.send_message(call.message.chat.id,
+                     f'🔗 Оберіть опцію нижче:',
+                     reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'helpdesk_show_password')
+@authorized_only(user_type='users')
+def show_helpdesk_password(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT crm_id FROM employees WHERE telegram_user_id = %s', (call.message.chat.id,))
+        crm_user_id = cursor.fetchone()[0]
+    crm_password = get_employee_pass_from_crm(crm_user_id)
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(text='🔗 Перейти до Helpdesk IT', url='https://help.netronic.team/'))
+    sent_message = bot.edit_message_text(f'🔑 Ваш пароль: <code>{crm_password}</code> (натисніть для копіювання)',
+                                         call.message.chat.id, call.message.message_id, reply_markup=markup,
+                                         parse_mode='HTML')
+    sleep(15)
+    markup.add(types.InlineKeyboardButton(text='🔑 Нагадати пароль', callback_data='helpdesk_show_password'))
+    bot.edit_message_text(f'🔗 Оберіть опцію нижче:',
+                          call.message.chat.id, sent_message.message_id, reply_markup=markup,
+                          parse_mode='HTML')
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('edit_link_'))
