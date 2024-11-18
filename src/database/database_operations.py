@@ -40,17 +40,29 @@ def update_authorized_users(authorized_ids: dict):
 
 def find_contact_by_name(query):
     words = query.split()
+
+    if len(words) < 2:
+        words = [query, query]
+
+    first_word, second_word = words[0], words[1]
+
     with DatabaseConnection() as (conn, cursor):
-        for word in words:
-            cursor.execute(
-                '''
-                SELECT emp.id, emp.name, emp.position, string_agg(key.keyword, ', ') as keywords
-                FROM employees emp
-                LEFT JOIN keywords key ON emp.id = key.employee_id
-                WHERE emp.name ILIKE %s OR emp.position ILIKE %s OR key.keyword ILIKE %s OR emp.telegram_username = %s
-                GROUP BY emp.id, emp.name, emp.position
-                ORDER BY emp.name;
-                ''',
-                (f'%{word}%', f'%{word}%', f'%{word}%', word))
-            found_contacts = cursor.fetchall()
-            return found_contacts
+        cursor.execute(
+            '''
+            SELECT emp.id, emp.name, emp.position, string_agg(key.keyword, ', ') as keywords
+            FROM employees emp
+            LEFT JOIN keywords key ON emp.id = key.employee_id
+            WHERE (emp.name ILIKE %s AND emp.name ILIKE %s)
+               OR (emp.position ILIKE %s AND emp.position ILIKE %s)
+               OR (key.keyword ILIKE %s AND key.keyword ILIKE %s)
+               OR emp.telegram_username = %s
+            GROUP BY emp.id, emp.name, emp.position
+            ORDER BY emp.name;
+            ''',
+            (f'%{first_word}%', f'%{second_word}%',
+             f'%{first_word}%', f'%{second_word}%',
+             f'%{first_word}%', f'%{second_word}%',
+             query)
+        )
+        found_contacts = cursor.fetchall()
+        return found_contacts
