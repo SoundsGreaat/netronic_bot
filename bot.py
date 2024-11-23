@@ -148,7 +148,7 @@ decrypt_session(fernet_key, input_file='src/userbot_session_encrypted', output_f
 
 main_menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-knowledge_base_button = types.KeyboardButton('🎓 База знань')
+knowledge_base_button = types.KeyboardButton('🎓 Навчання')
 business_processes_button = types.KeyboardButton('💼 Бізнес-процеси')
 news_feed_button = types.KeyboardButton('🔗 Стрічка новин')
 contacts_button = types.KeyboardButton('📞 Контакти')
@@ -220,7 +220,7 @@ def new_member_handler(message):
                 conn.commit()
 
 
-@bot.message_handler(func=lambda message: message.text == '🎓 База знань')
+@bot.message_handler(func=lambda message: message.text == '🎓 Навчання')
 @authorized_only(user_type='users')
 def send_knowledge_base(message, edit_message=False):
     send_links(message, 'knowledge_base', edit_message)
