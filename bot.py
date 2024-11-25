@@ -730,7 +730,7 @@ def add_employee(call):
     message.chat.id) == 'add_employee')
 @authorized_only(user_type='admins')
 def proceed_add_employee_data(message, delete_user_message=True, skip_phone=False, skip_email=False,
-                              skip_username=False):
+                              skip_username=False, skip_dob=False):
     finish_function = False
     department_id = add_employee_data[message.chat.id]['department_id']
     sub_department_id = add_employee_data[message.chat.id]['sub_department_id']
@@ -779,8 +779,32 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
 
     elif not add_employee_data[message.chat.id].get('position'):
         add_employee_data[message.chat.id]['position'] = message.text
-        message_text = '🆔 Введіть юзернейм нового співробітника:'
+        message_text = '🎂 Введіть дату народження нового співробітника:'
         if add_employee_data[message.chat.id].get('position'):
+            skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_dob')
+
+    elif not add_employee_data[message.chat.id].get('date_of_birth'):
+        if skip_dob:
+            add_employee_data[message.chat.id]['date_of_birth'] = 'skip'
+        else:
+            date_formats = ['%d.%m.%Y', '%d-%m-%Y', '%d/%m/%Y', '%d %m %Y']
+            for date_format in date_formats:
+                try:
+                    formatted_date = datetime.datetime.strptime(message.text, date_format)
+                    break
+                except ValueError:
+                    continue
+            else:
+                message_text = ('🚫 Дата народження введена невірно.'
+                                '\nВведіть дату народження в форматі <b>ДД.ММ.РРРР</b>:')
+                sent_message = bot.send_message(message.chat.id, message_text, parse_mode='HTML')
+                add_employee_data[message.chat.id]['saved_message'] = sent_message
+                return
+
+            add_employee_data[message.chat.id]['date_of_birth'] = formatted_date
+            print(add_employee_data[message.chat.id]['date_of_birth'])
+        message_text = '🆔 Введіть юзернейм нового співробітника:'
+        if add_employee_data[message.chat.id].get('date_of_birth'):
             skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_username')
 
     elif not add_employee_data[message.chat.id].get('telegram_username'):
@@ -813,6 +837,9 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
         if add_employee_data[message.chat.id]['email'] == 'skip':
             add_employee_data[message.chat.id]['email'] = None
 
+        if add_employee_data[message.chat.id]['date_of_birth'] == 'skip':
+            add_employee_data[message.chat.id]['date_of_birth'] = None
+
         if add_employee_data[message.chat.id]['telegram_username'] == 'skip':
             add_employee_data[message.chat.id]['telegram_username'] = None
             add_employee_data[message.chat.id]['telegram_user_id'] = None
@@ -820,15 +847,16 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
         with DatabaseConnection() as (conn, cursor):
             cursor.execute(
                 'INSERT INTO employees (name, phone, position, telegram_username, sub_department_id, '
-                'telegram_user_id, email)'
-                'VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id',
+                'telegram_user_id, email, date_of_birth) '
+                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id',
                 (add_employee_data[message.chat.id]['name'],
                  add_employee_data[message.chat.id]['phone'],
                  add_employee_data[message.chat.id]['position'],
                  add_employee_data[message.chat.id]['telegram_username'],
                  int(add_employee_data[message.chat.id]['sub_department_id']),
                  add_employee_data[message.chat.id]['telegram_user_id'],
-                 add_employee_data[message.chat.id]['email']))
+                 add_employee_data[message.chat.id]['email'],
+                 add_employee_data[message.chat.id]['date_of_birth']))
             employee_id = cursor.fetchone()[0]
             conn.commit()
         message_text = f'✅ Співробітник <b>{add_employee_data[message.chat.id]["name"]}</b> доданий до бази даних.'
@@ -875,6 +903,12 @@ def skip_username(call):
     proceed_add_employee_data(call.message, delete_user_message=False, skip_username=True)
 
 
+@bot.callback_query_handler(func=lambda call: call.data == 'skip_dob')
+@authorized_only(user_type='admins')
+def skip_dob(call):
+    proceed_add_employee_data(call.message, delete_user_message=False, skip_dob=True)
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('profile_'))
 @authorized_only(user_type='users')
 def send_profile(call, call_data=None):
@@ -917,7 +951,8 @@ def send_profile(call, call_data=None):
                                  emp.phone,
                                  emp.telegram_username,
                                  intermediate_departments.name,
-                                 emp.email
+                                 emp.email,
+                                 emp.date_of_birth
                         FROM employees as emp
                         JOIN sub_departments ON emp.sub_department_id = sub_departments.id
                         JOIN departments ON sub_departments.department_id = departments.id
@@ -935,6 +970,7 @@ def send_profile(call, call_data=None):
     employee_username = employee_info[5]
     employee_intermediate_department = employee_info[6]
     employee_email = employee_info[7]
+    employee_date_of_birth = employee_info[8].strftime('%d/%m/%Y') if employee_info[8] else None
 
     office_string = f'\n<b>🏢 Офіс/служба</b>: {employee_intermediate_department}' if employee_intermediate_department \
         else ''
@@ -944,6 +980,8 @@ def send_profile(call, call_data=None):
     username_string = f'\n<b>🆔 Юзернейм</b>: {employee_username}' \
         if employee_username else f'\n<b>🆔 Юзернейм</b>: Не вказано'
     email_string = f'\n<b>📧 Email</b>: {employee_email}' if employee_email else f'\n<b>📧 Email</b>: Не вказано'
+    date_of_birth_string = f'\n<b>🎂 Дата народження</b>: {employee_date_of_birth}' \
+        if employee_date_of_birth else f'\n<b>🎂 Дата народження</b>: Не вказано'
 
     message_text = (f'👨‍💻 <b>{employee_name}</b>'
                     f'\n\n<b>🏢 Департамент</b>: {employee_department}'
@@ -952,7 +990,8 @@ def send_profile(call, call_data=None):
                     f'\n<b>💼 Посада</b>: {employee_position}'
                     f'{phone_string}'
                     f'{username_string}'
-                    f'{email_string}')
+                    f'{email_string}'
+                    f'{date_of_birth_string}')
     if call_data:
         bot.send_message(chat_id, message_text, reply_markup=markup, parse_mode='HTML')
     else:
@@ -980,6 +1019,7 @@ def edit_employee(call):
         edit_position_btn_callback = f'e_pos_s_{search_query}_{employee_id}'
         edit_username_btn_callback = f'e_uname_s_{search_query}_{employee_id}'
         edit_email_btn_callback = f'e_email_s_{search_query}_{employee_id}'
+        edit_date_of_birth_btn_callback = f'e_dob_s_{search_query}_{employee_id}'
         show_keywords_btn_callback = f'show_keywords_s_{search_query}_{employee_id}'
         delete_btn_callback = f'delete_s_{search_query}_{employee_id}'
         back_btn_callback = f'profile_s_{search_query}_{employee_id}'
@@ -996,6 +1036,8 @@ def edit_employee(call):
                                       f'{sub_department_id}_{employee_id}')
         edit_email_btn_callback = (f'e_email_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                    f'{sub_department_id}_{employee_id}')
+        edit_date_of_birth_btn_callback = (f'e_dob_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                                           f'{sub_department_id}_{employee_id}')
         show_keywords_btn_callback = (
             f'show_keywords_{additional_instance}_{department_id}_{intermediate_department_id}_'
             f'{sub_department_id}_{employee_id}')
@@ -1009,6 +1051,8 @@ def edit_employee(call):
     edit_position_btn = types.InlineKeyboardButton(text='💼 Змінити посаду', callback_data=edit_position_btn_callback)
     edit_username_btn = types.InlineKeyboardButton(text='🆔 Змінити юзернейм', callback_data=edit_username_btn_callback)
     edit_email_btn = types.InlineKeyboardButton(text='📧 Змінити email', callback_data=edit_email_btn_callback)
+    edit_date_of_birth_btn = types.InlineKeyboardButton(text='🎂 Змінити дату народження',
+                                                        callback_data=edit_date_of_birth_btn_callback)
     show_keywords_btn = types.InlineKeyboardButton(text='🔍 Показати ключові слова',
                                                    callback_data=show_keywords_btn_callback)
     make_admin_btn = types.InlineKeyboardButton(text='⚠️ Переключити статус адміністратора',
@@ -1018,7 +1062,7 @@ def edit_employee(call):
 
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn, show_keywords_btn,
-               edit_email_btn)
+               edit_email_btn, edit_date_of_birth_btn)
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT telegram_user_id FROM employees WHERE id = %s', (employee_id,))
         employee_telegram_id = cursor.fetchone()[0]
@@ -1258,9 +1302,12 @@ def proceed_edit_employee(call):
     elif call.data.startswith('e_uname'):
         edit_employee_data[call.from_user.id]['column'] = ('telegram_username', employee_id)
         message_text = f'🆔 Введіть новий юзернейм для контакту <b>{employee_name}</b>:'
-    else:
+    elif call.data.startswith('e_email'):
         edit_employee_data[call.from_user.id]['column'] = ('email', employee_id)
         message_text = f'📧 Введіть новий email для контакту <b>{employee_name}</b>:'
+    elif call.data.startswith('e_dob'):
+        edit_employee_data[call.from_user.id]['column'] = ('date_of_birth', employee_id)
+        message_text = f'🎂 Введіть нову дату народження для контакту <b>{employee_name}</b>:'
 
     back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=back_btn_callback)
     markup = types.InlineKeyboardMarkup()
@@ -1321,6 +1368,21 @@ def edit_employee_data_ans(message):
     elif column == 'email':
         result_message_text = f'✅ Email контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
         log_text = f'Employee {employee_id} email changed to {new_value} by {message.from_user.username}.'
+    elif column == 'date_of_birth':
+        date_formats = ['%d.%m.%Y', '%d-%m-%Y', '%d/%m/%Y', '%d %m %Y']
+        for date_format in date_formats:
+            try:
+                new_value = datetime.datetime.strptime(new_value, date_format)
+                result_message_text = f'✅ Дату народження контакту <b>{employee_name}</b> змінено на <b>{new_value.strftime("%d/%m/%Y")}</b>.'
+                log_text = f'Employee {employee_id} date of birth changed to {new_value} by {message.from_user.username}.'
+                break
+            except ValueError:
+                continue
+        else:
+            result_message_text = ('🚫 Дату народження введено невірно.'
+                                   '\nВведіть дату народження в форматі ДД.ММ.РРРР:')
+            log_text = ''
+            finish_function = False
     else:
         return  # This should never happen
 
