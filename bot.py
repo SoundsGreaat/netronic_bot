@@ -14,7 +14,7 @@ from time import sleep
 from telebot import TeleBot, types, apihelper
 from openai import OpenAI
 
-from src.crm_api_functions import get_employee_pass_from_crm
+from src.crm_api_functions import get_employee_pass_from_crm, add_employee_to_crm, delete_employee_from_crm
 from src.google_forms_filler import FormFiller
 from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
 from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
@@ -844,11 +844,18 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
             add_employee_data[message.chat.id]['telegram_username'] = None
             add_employee_data[message.chat.id]['telegram_user_id'] = None
 
+        crm_id = add_employee_to_crm(add_employee_data[message.chat.id]['name'],
+                                     add_employee_data[message.chat.id]['phone'],
+                                     add_employee_data[message.chat.id]['position'],
+                                     add_employee_data[message.chat.id]['telegram_user_id'],
+                                     add_employee_data[message.chat.id]['telegram_username'],
+                                     add_employee_data[message.chat.id]['email'])
+
         with DatabaseConnection() as (conn, cursor):
             cursor.execute(
                 'INSERT INTO employees (name, phone, position, telegram_username, sub_department_id, '
-                'telegram_user_id, email, date_of_birth) '
-                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id',
+                'telegram_user_id, email, date_of_birth,crm_id) '
+                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id',
                 (add_employee_data[message.chat.id]['name'],
                  add_employee_data[message.chat.id]['phone'],
                  add_employee_data[message.chat.id]['position'],
@@ -856,10 +863,11 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
                  int(add_employee_data[message.chat.id]['sub_department_id']),
                  add_employee_data[message.chat.id]['telegram_user_id'],
                  add_employee_data[message.chat.id]['email'],
-                 add_employee_data[message.chat.id]['date_of_birth']))
+                 add_employee_data[message.chat.id]['date_of_birth'],
+                 crm_id))
             employee_id = cursor.fetchone()[0]
             conn.commit()
-        message_text = f'✅ Співробітник <b>{add_employee_data[message.chat.id]["name"]}</b> доданий до бази даних.'
+        message_text = f'✅ Співробітник <b>{add_employee_data[message.chat.id]["name"]}</b> доданий до бази даних та CRM системи.'
         update_authorized_users(authorized_ids)
         finish_function = True
         log_text = f'Employee {employee_id} added by @{message.from_user.username}.'
@@ -1469,10 +1477,13 @@ def confirm_delete_employee(call):
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT name, telegram_user_id FROM employees WHERE id = %s', (employee_id,))
         employee_name, telegram_user_id = cursor.fetchone()
-        cursor.execute('DELETE FROM employees WHERE id = %s', (employee_id,))
+        cursor.execute('DELETE FROM employees WHERE id = %s RETURNING crm_id', (employee_id,))
+        crm_id = cursor.fetchone()[0]
         conn.commit()
         cursor.execute('SELECT chat_id, chat_name from telegram_chats')
         chats = cursor.fetchall()
+
+    delete_employee_from_crm(crm_id)
 
     print(f'Employee {employee_name} deleted by {call.from_user.username}.')
     update_authorized_users(authorized_ids)
