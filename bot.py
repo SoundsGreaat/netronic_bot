@@ -53,6 +53,8 @@ openai_data = defaultdict(dict)
 
 make_card_data = defaultdict(dict)
 
+secret_santa_data = defaultdict(dict)
+
 process_in_progress = {}
 
 COMMENDATIONS_PER_PAGE = 10
@@ -154,6 +156,7 @@ news_feed_button = types.KeyboardButton('🔗 Стрічка новин')
 contacts_button = types.KeyboardButton('📞 Контакти')
 make_card_button = types.KeyboardButton('📜 Меню подяк')
 support_button = types.KeyboardButton('💭 Зауваження по роботі боту')
+secret_santa_button = types.KeyboardButton('🎅 Таємний Санта')
 
 main_menu.row(knowledge_base_button, business_processes_button)
 main_menu.row(news_feed_button, contacts_button)
@@ -170,6 +173,10 @@ def send_main_menu(message):
         employee_name = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
+        cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
+        secret_santa_started = cursor.fetchone()[0]
+    if secret_santa_started:
+        main_menu.row(secret_santa_button)
     with open('./assets/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
@@ -178,11 +185,13 @@ def send_main_menu(message):
                        reply_markup=main_menu, parse_mode='HTML')
 
     if message.chat.id in authorized_ids['admins']:
+        main_menu.row(secret_santa_button)
         bot.send_message(message.chat.id, '🔐 Ви авторизовані як адміністратор.'
                                           '\nВам доступні додаткові команди:'
                                           '\n\n/update_authorized_users - оновити список авторизованих користувачів'
                                           '\n/edit_link_mode - увімкнути/вимкнути режим редагування посилань'
-                                          '\n/temp_authorize - тимчасово авторизувати користувача')
+                                          '\n/temp_authorize - тимчасово авторизувати користувача',
+                         reply_markup=main_menu)
 
 
 @bot.message_handler(commands=['update_authorized_users'])
@@ -2020,6 +2029,178 @@ def proceed_contact_search(message, edit_message=False):
 
         sent_message = bot.send_message(message.chat.id, '🚫 Співробітник не знайдений', reply_markup=markup)
         user_data['messages_to_delete'][message.chat.id] = sent_message.message_id
+
+
+@bot.message_handler(func=lambda message: message.text == '🎅 Таємний Санта')
+@authorized_only(user_type='users')
+def secret_santa_menu(message):
+    markup = types.InlineKeyboardMarkup()
+    if message.chat.id in authorized_ids['admins']:
+        start_phase_1_btn = types.InlineKeyboardButton(text='🎁 Почати першу фазу', callback_data='start_phase_1')
+        markup.add(start_phase_1_btn)
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
+        is_started = cursor.fetchone()[0]
+
+    if is_started:
+        fill_info_btn = types.InlineKeyboardButton(text='📝 Заповнити інформацію',
+                                                   callback_data='secret_santa_fill_info')
+        show_profile_btn = types.InlineKeyboardButton(text='👤 Показати вказану інформацію',
+                                                      callback_data='secret_santa_show_profile')
+        markup.add(fill_info_btn, show_profile_btn, row_width=1)
+
+    bot.send_message(message.chat.id, '🎅 Оберіть дію:', reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'start_phase_1')
+@authorized_only(user_type='admins')
+def start_phase_1(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
+        is_started = cursor.fetchone()[0]
+        if is_started:
+            bot.edit_message_text('🎁 Перша фаза вже розпочата.', call.message.chat.id, call.message.message_id)
+            return
+        cursor.execute('UPDATE secret_santa_phases SET is_started = TRUE WHERE phase_number = 1')
+        conn.commit()
+
+    notify_users_btn = types.InlineKeyboardButton(text='📢 Повідомити всіх користувачів', callback_data='notify_users')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(notify_users_btn)
+    bot.edit_message_text('🎁 Перша фаза розпочата.'
+                          '\n Бажаєте повідомити всіх користувачів?', call.message.chat.id, call.message.message_id,
+                          reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'notify_users')
+@authorized_only(user_type='admins')
+def notify_users(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT telegram_user_id FROM employees WHERE telegram_user_id IS NOT NULL')
+        users = cursor.fetchall()
+
+    for user in users:
+        try:
+            bot.send_message(user[0], '🎅 Перша фаза Таємного Санти розпочалась!'
+                                      '\nНатисніть /start і побачите нову кнопку для участі.'
+                                      '\nБудь ласка, не забудьте заповнити інформацію про себе.')
+        except apihelper.ApiTelegramException:
+            print(f'Error while sending message to {user[0]}.')
+
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'secret_santa_fill_info')
+@authorized_only(user_type='users')
+def secret_santa_fill_info(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT emp.id FROM secret_santa_info '
+                       'JOIN employees emp ON employee_id = emp.id '
+                       'WHERE emp.telegram_user_id = %s', (call.message.chat.id,))
+        if cursor.fetchone():
+            bot.send_message(call.message.chat.id, '🎅 Ви вже заповнили інформацію для Таємного Санти.')
+            return
+
+    process_in_progress[call.message.chat.id] = 'secret_santa_fill_info'
+    sent_message = bot.edit_message_text(
+        '🎅 Введіть назву міста, повну адресу та номер відділення/поштомату (тільки НП):', call.message.chat.id,
+        call.message.message_id)
+    secret_santa_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.message_handler(
+    func=lambda message: message.text not in button_names and process_in_progress.get(
+        message.chat.id) == 'secret_santa_fill_info')
+@authorized_only(user_type='users')
+def secret_santa_fill_info_ans(message):
+    if not secret_santa_data[message.chat.id].get('address'):
+        secret_santa_data[message.chat.id]['address'] = message.text
+        sent_message = secret_santa_data[message.chat.id]['sent_message']
+        bot.delete_message(message.chat.id, message.message_id)
+        sent_message = bot.edit_message_text('🎅 Введіть ваші побажання, що би ви хотіли отримати? Що би не хотіли?'
+                                             '\nПостарайтеся бути якомога конкретнішими:', message.chat.id,
+                                             sent_message.message_id)
+        secret_santa_data[message.chat.id]['sent_message'] = sent_message
+    elif not secret_santa_data[message.chat.id].get('requests'):
+        secret_santa_data[message.chat.id]['requests'] = message.text
+
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
+            employee_id = cursor.fetchone()[0]
+            cursor.execute('INSERT INTO secret_santa_info (employee_id, address, request) VALUES (%s, %s, %s)',
+                           (employee_id, secret_santa_data[message.chat.id]['address'],
+                            secret_santa_data[message.chat.id]['requests']))
+            conn.commit()
+
+        sent_message = secret_santa_data[message.chat.id]['sent_message']
+        bot.delete_message(message.chat.id, message.message_id)
+        bot.delete_message(message.chat.id, sent_message.message_id)
+        bot.send_message(message.chat.id, '🎅 Ваші дані успішно збережені. Дякуємо за участь!')
+        del process_in_progress[message.chat.id]
+        del secret_santa_data[message.chat.id]
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'secret_santa_show_profile')
+@authorized_only(user_type='users')
+def secret_santa_show_profile(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT address, request, emp.name, emp.phone FROM secret_santa_info '
+                       'JOIN employees emp ON employee_id = emp.id '
+                       'WHERE emp.telegram_user_id = %s', (call.message.chat.id,))
+        if not cursor.rowcount:
+            bot.send_message(call.message.chat.id, '🎅 Ви ще не заповнили інформацію для Таємного Санти.')
+            return
+        address, request, name, phone = cursor.fetchone()
+
+    change_address_btn = types.InlineKeyboardButton(text='🏠 Змінити адресу', callback_data='santa_change_address')
+    change_request_btn = types.InlineKeyboardButton(text='🎁 Змінити побажання', callback_data='santa_change_request')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(change_address_btn, change_request_btn, row_width=1)
+
+    bot.edit_message_text(f'🎅 Ваші дані для Таємного Санти:'
+                          f'\n\n👤 Ім\'я: {name}'
+                          f'\n📞 Телефон: {phone}'
+                          f'\n🏠 Адреса: {address}'
+                          f'\n🎁 Побажання: {request}',
+                          call.message.chat.id, call.message.message_id, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('santa_change_'))
+@authorized_only(user_type='users')
+def secret_santa_change_info(call):
+    change_type = call.data.split('_')[2]
+    if change_type == 'address':
+        process_in_progress[call.message.chat.id] = 'santa_change_address'
+        sent_message = bot.send_message(call.message.chat.id, '🏠 Введіть нову адресу:')
+    else:
+        process_in_progress[call.message.chat.id] = 'santa_change_request'
+        sent_message = bot.send_message(call.message.chat.id, '🎁 Введіть нові побажання:')
+
+    secret_santa_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.message_handler(
+    func=lambda message: message.text not in button_names and process_in_progress.get(
+        message.chat.id) in ['santa_change_address', 'santa_change_request'])
+@authorized_only(user_type='users')
+def secret_santa_change_info_ans(message):
+    change_type = process_in_progress[message.chat.id].split('_')[2]
+    new_info = message.text
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
+        employee_id = cursor.fetchone()[0]
+        cursor.execute(f'UPDATE secret_santa_info SET {change_type} = %s WHERE employee_id = %s',
+                       (new_info, employee_id))
+        conn.commit()
+
+    sent_message = secret_santa_data[message.chat.id]['sent_message']
+    bot.delete_message(message.chat.id, message.message_id)
+    bot.delete_message(message.chat.id, sent_message.message_id)
+    bot.send_message(message.chat.id, '🎅 Інформацію успішно змінено.')
+    del process_in_progress[message.chat.id]
+    del secret_santa_data[message.chat.id]
 
 
 def main():
