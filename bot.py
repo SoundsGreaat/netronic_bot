@@ -162,6 +162,9 @@ main_menu.row(knowledge_base_button, business_processes_button)
 main_menu.row(news_feed_button, contacts_button)
 main_menu.row(make_card_button, support_button)
 
+admin_menu = main_menu
+admin_menu.row(secret_santa_button)
+
 button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
 
 
@@ -176,22 +179,23 @@ def send_main_menu(message):
         cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
         secret_santa_started = cursor.fetchone()[0]
     if secret_santa_started:
-        main_menu.row(secret_santa_button)
+        markup = admin_menu
+    else:
+        markup = main_menu
     with open('./assets/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
                                f'<b>Netronic</b>.'
                                f'\nЩо тебе цікавить?',
-                       reply_markup=main_menu, parse_mode='HTML')
+                       reply_markup=markup, parse_mode='HTML')
 
     if message.chat.id in authorized_ids['admins']:
-        main_menu.row(secret_santa_button)
         bot.send_message(message.chat.id, '🔐 Ви авторизовані як адміністратор.'
                                           '\nВам доступні додаткові команди:'
                                           '\n\n/update_authorized_users - оновити список авторизованих користувачів'
                                           '\n/edit_link_mode - увімкнути/вимкнути режим редагування посилань'
                                           '\n/temp_authorize - тимчасово авторизувати користувача',
-                         reply_markup=main_menu)
+                         reply_markup=admin_menu)
 
 
 @bot.message_handler(commands=['update_authorized_users'])
