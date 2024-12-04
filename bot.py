@@ -5,6 +5,7 @@ import threading
 import asyncio
 import time
 import datetime
+import copy
 
 import gforms
 
@@ -162,7 +163,7 @@ main_menu.row(knowledge_base_button, business_processes_button)
 main_menu.row(news_feed_button, contacts_button)
 main_menu.row(make_card_button, support_button)
 
-admin_menu = main_menu
+admin_menu = copy.deepcopy(main_menu)
 admin_menu.row(secret_santa_button)
 
 button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
