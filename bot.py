@@ -2119,24 +2119,71 @@ def secret_santa_fill_info(call):
     func=lambda message: message.text not in button_names and process_in_progress.get(
         message.chat.id) == 'secret_santa_fill_info')
 @authorized_only(user_type='users')
-def secret_santa_fill_info_ans(message):
+def secret_santa_fill_info_ans(message, skip_phone=False, delete_message=True):
     if not secret_santa_data[message.chat.id].get('address'):
         secret_santa_data[message.chat.id]['address'] = message.text
         sent_message = secret_santa_data[message.chat.id]['sent_message']
         bot.delete_message(message.chat.id, message.message_id)
-        sent_message = bot.edit_message_text('🎅 Введіть ваші побажання, що би ви хотіли отримати? Що би не хотіли?'
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT phone FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
+            employee_phone = cursor.fetchone()[0]
+
+        markup = types.InlineKeyboardMarkup()
+        confirm_btn = types.InlineKeyboardButton(text='✅ Це мій особистий номер',
+                                                 callback_data='secret_santa_confirm_phone')
+        markup.add(confirm_btn)
+
+        sent_message = bot.edit_message_text(
+            f'🎅 Санта вже знає твій номер телефону, '
+            f'якщо {employee_phone} це твій особистий номер, натисни кнопку нижче.'
+            f'\nЯкщо це не твій особистий номер, введи його:',
+            message.chat.id,
+            sent_message.message_id,
+            reply_markup=markup
+        )
+        secret_santa_data[message.chat.id]['sent_message'] = sent_message
+
+    elif not secret_santa_data[message.chat.id].get('phone'):
+        if skip_phone:
+            secret_santa_data[message.chat.id]['phone'] = 'skip'
+
+        secret_santa_data[message.chat.id]['phone'] = message.text
+        sent_message = secret_santa_data[message.chat.id]['sent_message']
+        if delete_message:
+            bot.delete_message(message.chat.id, message.message_id)
+        sent_message = bot.edit_message_text('🎅 Введіть ваші побажання, що би ви хотіли отримати?'
                                              '\nПостарайтеся бути якомога конкретнішими:', message.chat.id,
                                              sent_message.message_id)
         secret_santa_data[message.chat.id]['sent_message'] = sent_message
+
     elif not secret_santa_data[message.chat.id].get('requests'):
         secret_santa_data[message.chat.id]['requests'] = message.text
+        sent_message = secret_santa_data[message.chat.id]['sent_message']
+        bot.delete_message(message.chat.id, message.message_id)
+        sent_message = bot.edit_message_text('🎅 Супер! А що би ви НЕ хотіли отримати?'
+                                             '\nПостарайтеся бути якомога конкретнішими:', message.chat.id,
+                                             sent_message.message_id)
+        secret_santa_data[message.chat.id]['sent_message'] = sent_message
+
+    elif not secret_santa_data[message.chat.id].get('aversions'):
+        secret_santa_data[message.chat.id]['aversions'] = message.text
 
         with DatabaseConnection() as (conn, cursor):
-            cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
-            employee_id = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO secret_santa_info (employee_id, address, request) VALUES (%s, %s, %s)',
-                           (employee_id, secret_santa_data[message.chat.id]['address'],
-                            secret_santa_data[message.chat.id]['requests']))
+            cursor.execute('SELECT id, phone FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
+            employee_id, employee_phone = cursor.fetchone()
+            print(employee_id, employee_phone)
+            if secret_santa_data[message.chat.id]['phone'] == 'skip':
+                secret_santa_data[message.chat.id]['phone'] = employee_phone
+            cursor.execute(
+                'INSERT INTO secret_santa_info (employee_id, address, request, aversions, phone) VALUES (%s, %s, '
+                '%s, %s, %s)',
+                (
+                    employee_id,
+                    secret_santa_data[message.chat.id]['address'],
+                    secret_santa_data[message.chat.id]['requests'],
+                    secret_santa_data[message.chat.id]['aversions'],
+                    secret_santa_data[message.chat.id]['phone']
+                ))
             conn.commit()
 
         sent_message = secret_santa_data[message.chat.id]['sent_message']
@@ -2147,28 +2194,38 @@ def secret_santa_fill_info_ans(message):
         del secret_santa_data[message.chat.id]
 
 
+@bot.callback_query_handler(func=lambda call: call.data == 'secret_santa_confirm_phone')
+@authorized_only(user_type='users')
+def secret_santa_confirm_phone(call):
+    secret_santa_fill_info_ans(call.message, skip_phone=True, delete_message=False)
+
+
 @bot.callback_query_handler(func=lambda call: call.data == 'secret_santa_show_profile')
 @authorized_only(user_type='users')
 def secret_santa_show_profile(call):
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT address, request, emp.name, emp.phone FROM secret_santa_info '
+        cursor.execute('SELECT address, request, aversions, emp.name, secret_santa_info.phone FROM secret_santa_info '
                        'JOIN employees emp ON employee_id = emp.id '
                        'WHERE emp.telegram_user_id = %s', (call.message.chat.id,))
         if not cursor.rowcount:
             bot.send_message(call.message.chat.id, '🎅 Ви ще не заповнили інформацію для Таємного Санти.')
             return
-        address, request, name, phone = cursor.fetchone()
+        address, request, aversions, name, phone = cursor.fetchone()
 
     change_address_btn = types.InlineKeyboardButton(text='🏠 Змінити адресу', callback_data='santa_change_address')
     change_request_btn = types.InlineKeyboardButton(text='🎁 Змінити побажання', callback_data='santa_change_request')
+    change_aversion_btn = types.InlineKeyboardButton(text='🚫 Змінити небажане', callback_data='santa_change_aversions')
+    change_phone_btn = types.InlineKeyboardButton(text='📞 Змінити телефон', callback_data='santa_change_phone')
+
     markup = types.InlineKeyboardMarkup()
-    markup.add(change_address_btn, change_request_btn, row_width=1)
+    markup.add(change_address_btn, change_request_btn, change_aversion_btn, change_phone_btn, row_width=1)
 
     bot.edit_message_text(f'🎅 Ваші дані для Таємного Санти:'
                           f'\n\n👤 Ім\'я: {name}'
                           f'\n📞 Телефон: {phone}'
                           f'\n🏠 Адреса: {address}'
-                          f'\n🎁 Побажання: {request}',
+                          f'\n🎁 Побажання: {request}'
+                          f'\n🚫 Небажане: {aversions}',
                           call.message.chat.id, call.message.message_id, reply_markup=markup)
 
 
@@ -2179,16 +2236,25 @@ def secret_santa_change_info(call):
     if change_type == 'address':
         process_in_progress[call.message.chat.id] = 'santa_change_address'
         sent_message = bot.send_message(call.message.chat.id, '🏠 Введіть нову адресу:')
-    else:
+    elif change_type == 'request':
         process_in_progress[call.message.chat.id] = 'santa_change_request'
         sent_message = bot.send_message(call.message.chat.id, '🎁 Введіть нові побажання:')
+    elif change_type == 'aversions':
+        process_in_progress[call.message.chat.id] = 'santa_change_aversions'
+        sent_message = bot.send_message(call.message.chat.id, '🚫 Введіть нові небажані подарунки:')
+    elif change_type == 'phone':
+        process_in_progress[call.message.chat.id] = 'santa_change_phone'
+        sent_message = bot.send_message(call.message.chat.id, '📞 Введіть новий номер телефону:')
+    else:
+        return
 
     secret_santa_data[call.message.chat.id]['sent_message'] = sent_message
 
 
 @bot.message_handler(
     func=lambda message: message.text not in button_names and process_in_progress.get(
-        message.chat.id) in ['santa_change_address', 'santa_change_request'])
+        message.chat.id) in ['santa_change_address', 'santa_change_request',
+                             'santa_change_aversions', 'santa_change_phone'])
 @authorized_only(user_type='users')
 def secret_santa_change_info_ans(message):
     change_type = process_in_progress[message.chat.id].split('_')[2]
