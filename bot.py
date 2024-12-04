@@ -141,7 +141,7 @@ def delete_messages(chat_id, dict_key='messages_to_delete'):
             pass
 
 
-client = OpenAI()
+# client = OpenAI()
 assistant_id = os.getenv('OPENAI_ASSISTANT_ID')
 bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
 
@@ -2048,9 +2048,9 @@ def secret_santa_menu(message):
         is_started = cursor.fetchone()[0]
 
     if is_started:
-        fill_info_btn = types.InlineKeyboardButton(text='📝 Заповнити інформацію',
+        fill_info_btn = types.InlineKeyboardButton(text='📝 Заповнити анкету для Санти',
                                                    callback_data='secret_santa_fill_info')
-        show_profile_btn = types.InlineKeyboardButton(text='👤 Показати вказану інформацію',
+        show_profile_btn = types.InlineKeyboardButton(text='👤 Моя анкета',
                                                       callback_data='secret_santa_show_profile')
         markup.add(fill_info_btn, show_profile_btn, row_width=1)
 
@@ -2086,9 +2086,10 @@ def notify_users(call):
 
     for user in users:
         try:
-            bot.send_message(user[0], '🎅 Перша фаза Таємного Санти розпочалась!'
-                                      '\nНатисніть /start і побачите нову кнопку для участі.'
-                                      '\nБудь ласка, не забудьте заповнити інформацію про себе.')
+            bot.send_message(user[0], '🎅 Привіт!'
+                                      '\nМи розпочинаємо довгоочікувану гру - Таємний Санта!'
+                                      '\nТи готовий?'
+                                      '\nНатисни 👉 /start і приймай участь у грі!')
         except apihelper.ApiTelegramException:
             print(f'Error while sending message to {user[0]}.')
 
@@ -2108,7 +2109,7 @@ def secret_santa_fill_info(call):
 
     process_in_progress[call.message.chat.id] = 'secret_santa_fill_info'
     sent_message = bot.edit_message_text(
-        '🎅 Введіть назву міста, повну адресу та номер відділення/поштомату (тільки НП):', call.message.chat.id,
+        '🎅 Введіть назву міста та номер відділення/поштомату (тільки НП):', call.message.chat.id,
         call.message.message_id)
     secret_santa_data[call.message.chat.id]['sent_message'] = sent_message
 
