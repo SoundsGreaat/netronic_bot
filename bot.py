@@ -142,7 +142,7 @@ def delete_messages(chat_id, dict_key='messages_to_delete'):
             pass
 
 
-# client = OpenAI()
+client = OpenAI()
 assistant_id = os.getenv('OPENAI_ASSISTANT_ID')
 bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
 
