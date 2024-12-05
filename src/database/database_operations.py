@@ -1,4 +1,5 @@
 from .database_setup import DatabaseConnection
+from ..google_api_functions import update_employees_in_sheet
 
 
 def test_connection():
@@ -31,6 +32,9 @@ def update_authorized_users(authorized_ids: dict):
             JOIN employees ON moderators.employee_id = employees.id
         ''')
         cursor_result = cursor.fetchall()
+
+        update_employees_in_sheet('1UpYnTpYIaEKabvkU18hYZSFEunfvwLQvMgN69R7Ydaw', 'BOT AUTOFILL')
+
         authorized_ids['moderators'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
 
         print(f'List of authorized users updated.'
