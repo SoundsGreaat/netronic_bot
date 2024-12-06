@@ -1380,6 +1380,7 @@ def edit_employee_data_ans(message):
         if telegram_user_id is not None:
             if not new_value.startswith('@'):
                 new_value = f'@{new_value}'
+            update_authorized_users(authorized_ids)
             result_message_text = f'✅ Юзернейм контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
             log_text = f'Employee {employee_id} username changed to {new_value} by {message.from_user.username}.'
         else:
