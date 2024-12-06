@@ -2109,6 +2109,8 @@ def secret_santa_fill_info(call):
             return
 
     process_in_progress[call.message.chat.id] = 'secret_santa_fill_info'
+    if secret_santa_data.get(call.message.chat.id):
+        del secret_santa_data[call.message.chat.id]
     sent_message = bot.edit_message_text(
         '🎅 Введіть назву міста та номер відділення/поштомату (тільки НП):', call.message.chat.id,
         call.message.message_id)
@@ -2146,8 +2148,8 @@ def secret_santa_fill_info_ans(message, skip_phone=False, delete_message=True):
     elif not secret_santa_data[message.chat.id].get('phone'):
         if skip_phone:
             secret_santa_data[message.chat.id]['phone'] = 'skip'
-
-        secret_santa_data[message.chat.id]['phone'] = message.text
+        else:
+            secret_santa_data[message.chat.id]['phone'] = message.text
         sent_message = secret_santa_data[message.chat.id]['sent_message']
         if delete_message:
             bot.delete_message(message.chat.id, message.message_id)
@@ -2189,7 +2191,8 @@ def secret_santa_fill_info_ans(message, skip_phone=False, delete_message=True):
         sent_message = secret_santa_data[message.chat.id]['sent_message']
         bot.delete_message(message.chat.id, message.message_id)
         bot.delete_message(message.chat.id, sent_message.message_id)
-        bot.send_message(message.chat.id, '🎅 Ваші дані успішно збережені. Дякуємо за участь!')
+        bot.send_message(message.chat.id, '🎅 Дякую за твою відповіді!'
+                                          '\nТепер почекаємо поки всі збираються для гри!')
         del process_in_progress[message.chat.id]
         del secret_santa_data[message.chat.id]
 
