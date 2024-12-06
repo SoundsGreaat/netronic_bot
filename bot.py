@@ -166,7 +166,7 @@ main_menu.row(make_card_button, support_button)
 admin_menu = copy.deepcopy(main_menu)
 admin_menu.row(secret_santa_button)
 
-button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
+button_names = [btn['text'] for row in admin_menu.keyboard for btn in row]
 
 
 @bot.message_handler(commands=['start', 'menu', 'help'])
