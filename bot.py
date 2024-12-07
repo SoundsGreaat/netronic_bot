@@ -2188,6 +2188,7 @@ def secret_santa_fill_info_ans(message, skip_phone=False, delete_message=True):
                     secret_santa_data[message.chat.id]['phone']
                 ))
             conn.commit()
+        update_authorized_users(authorized_ids)
 
         sent_message = secret_santa_data[message.chat.id]['sent_message']
         bot.delete_message(message.chat.id, message.message_id)
