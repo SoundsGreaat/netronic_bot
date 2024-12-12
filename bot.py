@@ -20,6 +20,7 @@ from src.google_forms_filler import FormFiller
 from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
 from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
 from src.make_card import make_card
+from src.reminder import scheduler, secret_santa_notification
 
 authorized_ids = {
     'users': set(),
@@ -2280,10 +2281,24 @@ def secret_santa_change_info_ans(message):
     del secret_santa_data[message.chat.id]
 
 
+def secret_santa_notification_wrapper():
+    secret_santa_notification(bot, DatabaseConnection)
+
+
 def main():
+    scheduler.add_job(secret_santa_notification_wrapper, 'cron', day_of_week='mon,wed,fri', hour=17, minute=0,
+                      id='multi_day_job', replace_existing=True)
+    scheduler.start()
+
     if test_connection():
         update_authorized_users(authorized_ids)
-        bot.infinity_polling()
+        threading.Thread(target=bot.infinity_polling, daemon=True).start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
 
 
 if __name__ == '__main__':
