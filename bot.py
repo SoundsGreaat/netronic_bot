@@ -2048,6 +2048,8 @@ def secret_santa_menu(message):
         markup.add(start_phase_1_btn)
         finish_phase_1_btn = types.InlineKeyboardButton(text='🎁 Завершити першу фазу', callback_data='finish_phase_1')
         markup.add(finish_phase_1_btn)
+        remind_btn = types.InlineKeyboardButton(text='🔔 Надіслати нагадування', callback_data='santa_notify_users')
+        markup.add(remind_btn)
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
@@ -2099,7 +2101,8 @@ def finish_phase_1(call):
         random.shuffle(participants)
         for i, participant_id in enumerate(participants):
             secret_santa_id = participants[(i + 1) % len(participants)]
-            cursor.execute('UPDATE secret_santa_info SET secret_santa_id = %s WHERE employee_id = %s', (secret_santa_id, participant_id))
+            cursor.execute('UPDATE secret_santa_info SET secret_santa_id = %s WHERE employee_id = %s',
+                           (secret_santa_id, participant_id))
         conn.commit()
 
     bot.edit_message_text('🎁 Перша фаза завершена. Учасники отримали своїх Таємних Сант.',
@@ -2309,6 +2312,14 @@ def secret_santa_change_info_ans(message):
 
 def secret_santa_notification_wrapper():
     secret_santa_notification(bot, DatabaseConnection)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'santa_notify_users')
+@authorized_only(user_type='admins')
+def santa_notify_users(call):
+    bot.send_message(call.message.chat.id, '🔔 Надсилання нагадування...')
+    secret_santa_notification_wrapper()
+    bot.send_message(call.message.chat.id, '🔔 Нагадування надіслано.')
 
 
 def main():
