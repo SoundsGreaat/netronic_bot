@@ -1,5 +1,6 @@
 import math
 import os
+import random
 import re
 import threading
 import asyncio
@@ -2045,6 +2046,8 @@ def secret_santa_menu(message):
     if message.chat.id in authorized_ids['admins']:
         start_phase_1_btn = types.InlineKeyboardButton(text='🎁 Почати першу фазу', callback_data='start_phase_1')
         markup.add(start_phase_1_btn)
+        finish_phase_1_btn = types.InlineKeyboardButton(text='🎁 Завершити першу фазу', callback_data='finish_phase_1')
+        markup.add(finish_phase_1_btn)
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
@@ -2078,6 +2081,29 @@ def start_phase_1(call):
     bot.edit_message_text('🎁 Перша фаза розпочата.'
                           '\n Бажаєте повідомити всіх користувачів?', call.message.chat.id, call.message.message_id,
                           reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'finish_phase_1')
+@authorized_only(user_type='admins')
+def finish_phase_1(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
+        is_started = cursor.fetchone()[0]
+        if not is_started:
+            bot.edit_message_text('🎁 Перша фаза ще не розпочата.', call.message.chat.id, call.message.message_id)
+            return
+        cursor.execute('UPDATE secret_santa_phases SET is_started = FALSE WHERE phase_number = 1')
+        conn.commit()
+        cursor.execute('SELECT employee_id FROM secret_santa_info')
+        participants = [row[0] for row in cursor.fetchall()]
+        random.shuffle(participants)
+        for i, participant_id in enumerate(participants):
+            secret_santa_id = participants[(i + 1) % len(participants)]
+            cursor.execute('UPDATE secret_santa_info SET secret_santa_id = %s WHERE employee_id = %s', (secret_santa_id, participant_id))
+        conn.commit()
+
+    bot.edit_message_text('🎁 Перша фаза завершена. Учасники отримали своїх Таємних Сант.',
+                          call.message.chat.id, call.message.message_id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'notify_users')
