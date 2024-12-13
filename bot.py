@@ -14,7 +14,8 @@ from time import sleep
 from telebot import TeleBot, types, apihelper
 from openai import OpenAI
 
-from src.crm_api_functions import get_employee_pass_from_crm, add_employee_to_crm, delete_employee_from_crm
+from src.crm_api_functions import get_employee_pass_from_crm, add_employee_to_crm, delete_employee_from_crm, \
+    update_employee_in_crm
 from src.google_forms_filler import FormFiller
 from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
 from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
@@ -1410,11 +1411,17 @@ def edit_employee_data_ans(message):
         edit_employee_data[message.chat.id]['error_message'] = error_message
     else:
         with DatabaseConnection() as (conn, cursor):
-            cursor.execute(f'UPDATE employees SET {column} = %s WHERE id = %s', (new_value, employee_id))
+            cursor.execute(f'UPDATE employees SET {column} = %s WHERE id = %s '
+                           f'RETURNING crm_id, name, phone, position, telegram_user_id, telegram_username, email',
+                           (new_value, employee_id))
+            crm_id, name, phone, position, telegram_user_id, telegram_username, email = cursor.fetchone()
             if telegram_user_id is not None:
                 cursor.execute('UPDATE employees SET telegram_user_id = %s WHERE id = %s',
                                (telegram_user_id, employee_id))
             conn.commit()
+
+        update_employee_in_crm(crm_id, name, phone, position, telegram_user_id, telegram_username, email)
+
         bot.send_message(message.chat.id, result_message_text, parse_mode='HTML')
         bot.send_message(message.chat.id, text=saved_message.text, reply_markup=saved_message.reply_markup,
                          parse_mode='HTML')

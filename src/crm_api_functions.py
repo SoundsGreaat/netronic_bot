@@ -70,3 +70,32 @@ def delete_employee_from_crm(crm_user_id):
         except AttributeError:
             print(f'Error {response.status_code}: {response.text}')
             return
+
+
+def update_employee_in_crm(crm_user_id, name, phone, position, telegram_user_id, telegram_username, email):
+    payload = {
+        'key': CRM_KEY,
+        'action': 'update',
+        'id': crm_user_id,
+        'name': name,
+        'phone': phone,
+        'position': position,
+        'telegram_user_id': telegram_user_id,
+        'telegram_username': telegram_username,
+        'email': email
+    }
+
+    response = requests.post(CRM_URL, json=payload)
+
+    if response.status_code == 200:
+        data = response.json()
+        try:
+            response_message = data.get('data')
+            print(response_message)
+            return
+        except AttributeError:
+            print(f'Error {response.status_code}: {response.text}')
+            return
+    else:
+        print(f'Error {response.status_code}: {response.text}')
+        return None
