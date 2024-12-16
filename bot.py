@@ -2049,25 +2049,43 @@ def proceed_contact_search(message, edit_message=False):
 @bot.message_handler(func=lambda message: message.text == '🎅 Таємний Санта')
 @authorized_only(user_type='users')
 def secret_santa_menu(message):
-    markup = types.InlineKeyboardMarkup()
-    if message.chat.id in authorized_ids['admins']:
-        start_phase_1_btn = types.InlineKeyboardButton(text='🎁 Почати першу фазу', callback_data='start_phase_1')
-        markup.add(start_phase_1_btn)
-        finish_phase_1_btn = types.InlineKeyboardButton(text='🎁 Завершити першу фазу', callback_data='finish_phase_1')
-        markup.add(finish_phase_1_btn)
-        remind_btn = types.InlineKeyboardButton(text='🔔 Надіслати нагадування', callback_data='santa_notify_users')
-        markup.add(remind_btn)
-
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
-        is_started = cursor.fetchone()[0]
+        is_phase_1_started = cursor.fetchone()[0]
+        cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 2')
+        is_phase_2_started = cursor.fetchone()[0]
 
-    if is_started:
+    markup = types.InlineKeyboardMarkup()
+    if message.chat.id in authorized_ids['admins']:
+        if not is_phase_1_started and not is_phase_2_started:
+            start_phase_1_btn = types.InlineKeyboardButton(text='🎁 Почати першу фазу', callback_data='start_phase_1')
+            markup.add(start_phase_1_btn)
+            start_phase_2_btn = types.InlineKeyboardButton(text='🎁 Почати другу фазу', callback_data='start_phase_2')
+            markup.add(start_phase_2_btn)
+        elif is_phase_1_started:
+            finish_phase_1_btn = types.InlineKeyboardButton(text='🎁 Завершити першу фазу',
+                                                            callback_data='finish_phase_1')
+            markup.add(finish_phase_1_btn)
+            remind_btn = types.InlineKeyboardButton(text='🔔 Надіслати нагадування', callback_data='santa_notify_users')
+            markup.add(remind_btn)
+        elif is_phase_2_started:
+            finish_phase_2_btn = types.InlineKeyboardButton(text='🎁 Завершити другу фазу',
+                                                            callback_data='finish_phase_2')
+            markup.add(finish_phase_2_btn)
+
+    if is_phase_1_started:
         fill_info_btn = types.InlineKeyboardButton(text='📝 Заповнити анкету для Санти',
                                                    callback_data='secret_santa_fill_info')
+        markup.row(fill_info_btn)
+    if is_phase_1_started or is_phase_2_started:
         show_profile_btn = types.InlineKeyboardButton(text='👤 Моя анкета',
                                                       callback_data='secret_santa_show_profile')
-        markup.add(fill_info_btn, show_profile_btn, row_width=1)
+        markup.row(show_profile_btn)
+
+    if is_phase_2_started:
+        show_recipient_btn = types.InlineKeyboardButton(text='🎅 Чий я Санта?',
+                                                        callback_data='secret_santa_show_recipient')
+        markup.row(show_recipient_btn)
 
     bot.send_message(message.chat.id, '🎅 Оберіть дію:', reply_markup=markup)
 
@@ -2114,6 +2132,64 @@ def finish_phase_1(call):
 
     bot.edit_message_text('🎁 Перша фаза завершена. Учасники отримали своїх Таємних Сант.',
                           call.message.chat.id, call.message.message_id)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'start_phase_2')
+@authorized_only(user_type='admins')
+def start_phase_2(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 2')
+        is_started = cursor.fetchone()[0]
+        if is_started:
+            bot.edit_message_text('🎁 Друга фаза вже розпочата.', call.message.chat.id, call.message.message_id)
+            return
+        cursor.execute('UPDATE secret_santa_phases SET is_started = TRUE WHERE phase_number = 2')
+        conn.commit()
+
+    sent_message = bot.edit_message_text('🎁 Друга фаза розпочата. Розсилаю повідомлення...',
+                                         call.message.chat.id, call.message.message_id)
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT employee_id, secret_santa_id FROM secret_santa_info')
+        participants = cursor.fetchall()
+
+        for recipient_id, secret_santa_id in participants:
+            cursor.execute('SELECT telegram_user_id FROM employees WHERE id = %s', (secret_santa_id,))
+            secret_santa_telegram_id = cursor.fetchone()[0]
+            cursor.execute('SELECT emp.name, santa.address, santa.request, santa.aversions, santa.phone '
+                           'FROM employees emp '
+                           'JOIN secret_santa_info santa ON emp.id = santa.employee_id '
+                           'WHERE emp.id = %s', (recipient_id,))
+            recipient_name, address, requests, aversions, phone = cursor.fetchone()
+            bot.send_message(secret_santa_telegram_id, f'🎅 Привіт!'
+                                                       f'\nТи Таємний Санта для <b>{recipient_name}!</b>'
+                                                       f'\nНе забудь підготувати подарунок та відправити його.'
+                                                       f'\nТа не забудь про інтригу! Не розкривай свою особу!'
+                                                       f'\n\n\n🏠 Адреса отримання: <b>{address}</b>'
+                                                       f'\n\n🎁 Побажання: <b>{requests}</b>'
+                                                       f'\n\n🚫 Небажане: <b>{aversions}</b>'
+                                                       f'\n\n📞 Телефон: <b>{phone}</b>',
+                             parse_mode='HTML')
+        bot.delete_message(call.message.chat.id, sent_message.message_id)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'secret_santa_show_recipient')
+@authorized_only(user_type='users')
+def secret_santa_show_recipient(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT recipient.name, santa.address, santa.request, santa.aversions, santa.phone '
+                       'FROM employees emp '
+                       'JOIN secret_santa_info santa ON emp.id = santa.secret_santa_id '
+                       'JOIN employees recipient ON recipient.id = santa.employee_id '
+                       'WHERE emp.telegram_user_id = %s', (call.message.chat.id,))
+        recipient_name, address, requests, aversions, phone = cursor.fetchone()
+
+
+    bot.send_message(call.message.chat.id, f'🎅 Ти Таємний Санта для <b>{recipient_name}!</b>'
+                                           f'\n\n🏠 Адреса отримання: <b>{address}</b>'
+                                           f'\n\n🎁 Побажання: <b>{requests}</b>'
+                                           f'\n\n🚫 Небажане: <b>{aversions}</b>'
+                                           f'\n\n📞 Телефон: <b>{phone}</b>',
+                     parse_mode='HTML')
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'notify_users')
