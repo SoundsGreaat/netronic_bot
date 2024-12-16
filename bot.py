@@ -227,6 +227,29 @@ def temp_authorize_user(message):
     bot.send_message(message.chat.id, 'Надішліть контакт користувача, якого ви хочете авторизувати.')
 
 
+@bot.message_handler(commands=['mass_message'])
+@authorized_only(user_type='admins')
+def send_mass_message(message):
+    process_in_progress[message.chat.id] = 'mass_message'
+    bot.send_message(message.chat.id, 'Надішліть повідомлення, яке ви хочете розіслати.')
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'mass_message')
+@authorized_only(user_type='admins')
+def proceed_mass_message(message):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT telegram_user_id FROM employees')
+        employees = cursor.fetchall()
+    for employee in employees:
+        try:
+            bot.send_message(employee[0], message.text)
+        except Exception as e:
+            print(e)
+    bot.send_message(message.chat.id, '✔️ Повідомлення розіслано.')
+    del process_in_progress[message.chat.id]
+
+
 @bot.message_handler(content_types=['new_chat_members'])
 def new_member_handler(message):
     for new_member in message.new_chat_members:
