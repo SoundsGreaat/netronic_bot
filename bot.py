@@ -180,7 +180,7 @@ def send_main_menu(message):
         employee_name = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
-        cursor.execute('SELECT is_started FROM secret_santa_phases WHERE phase_number = 1')
+        cursor.execute('SELECT EXISTS (SELECT 1 FROM secret_santa_phases WHERE phase_number IN (1, 2) AND is_started = TRUE)')
         secret_santa_started = cursor.fetchone()[0]
     if secret_santa_started:
         markup = admin_menu
