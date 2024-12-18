@@ -45,6 +45,7 @@ async def send_message(user_id, message):
     await client.start()
     try:
         async with client:
+            await client.get_entity(user_id)
             await client.send_message(user_id, message)
     except telethon.errors.rpcerrorlist.UserIsBlockedError:
         return False
