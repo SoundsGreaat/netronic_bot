@@ -1548,12 +1548,17 @@ def back_to_send_contacts_menu(call):
 
 
 @bot.message_handler(func=lambda message: message.text == '📜 Меню подяк')
-@authorized_only(user_type='moderators')
+@authorized_only(user_type='users')
 def thanks_menu(message):
-    show_thanks_button = types.InlineKeyboardButton(text='🔍 Передивитись подяки', callback_data='show_thanks')
-    send_thanks_button = types.InlineKeyboardButton(text='📜 Надіслати подяку', callback_data='send_thanks')
     markup = types.InlineKeyboardMarkup()
-    markup.add(show_thanks_button, send_thanks_button, row_width=1)
+    show_my_thanks_button = types.InlineKeyboardButton(text='🔍 Мої подяки', callback_data='show_my_thanks')
+    markup.add(show_my_thanks_button)
+
+    if message.chat.id in authorized_ids['moderators'] or message.chat.id in authorized_ids['admins']:
+        show_thanks_button = types.InlineKeyboardButton(text='🔍 Передивитись подяки', callback_data='show_thanks')
+        send_thanks_button = types.InlineKeyboardButton(text='📜 Надіслати подяку', callback_data='send_thanks')
+        markup.add(show_thanks_button, send_thanks_button, row_width=1)
+
     sent_message = bot.send_message(message.chat.id, '🔽 Оберіть дію:',
                                     reply_markup=markup)
     make_card_data[message.chat.id]['sent_message'] = sent_message
@@ -1569,6 +1574,33 @@ def show_thanks(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(week_thanks_button, month_thanks_button, year_thanks_button, all_thanks_button)
     bot.edit_message_text('🔍 Оберіть період:', call.message.chat.id, call.message.message_id, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'show_my_thanks')
+@authorized_only(user_type='users')
+def show_my_thanks(call):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (call.from_user.id,))
+        employee_id = cursor.fetchone()[0]
+        cursor.execute('SELECT name, position FROM employees WHERE id = %s', (employee_id,))
+        employee_name, employee_position = cursor.fetchone()
+        cursor.execute('SELECT id, commendation_text, commendation_date FROM commendations WHERE employee_to_id = %s',
+                       (employee_id,))
+        commendations = cursor.fetchall()
+
+    if not commendations:
+        bot.edit_message_text('🔍 У вас немає подяк.', call.message.chat.id, call.message.message_id)
+        return
+
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='thanks_menu')
+    markup = types.InlineKeyboardMarkup()
+    for commendation_id, commendation_text, commendation_date in commendations:
+        formatted_date = commendation_date.strftime('%d.%m.%Y')
+        message_text = f'👨‍💻 {employee_name} | {formatted_date}\n\n{commendation_text}'
+        markup.add(types.InlineKeyboardButton(text=message_text, callback_data=f'commendation_{commendation_id}'))
+
+    markup.add(back_btn)
+    bot.edit_message_text(f'📜 Ваші подяки:', call.message.chat.id, call.message.message_id, reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('time_thanks_'))
@@ -1591,13 +1623,15 @@ def show_thanks_period(call):
     with DatabaseConnection() as (conn, cursor):
         if start_date:
             cursor.execute(
-                'SELECT commendations.id, name, commendations.position, commendation_text, commendation_date FROM commendations '
+                'SELECT commendations.id, name, commendations.position, commendation_text, commendation_date '
+                'FROM commendations '
                 'JOIN employees ON employee_to_id = employees.id '
                 'WHERE commendation_date >= %s', (start_date,)
             )
         else:
             cursor.execute(
-                'SELECT commendations.id, name, commendations.position, commendation_text, commendation_date FROM commendations '
+                'SELECT commendations.id, name, commendations.position, commendation_text, commendation_date '
+                'FROM commendations '
                 'JOIN employees ON employee_to_id = employees.id'
             )
         commendations = cursor.fetchall()
