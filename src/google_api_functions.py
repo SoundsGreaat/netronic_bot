@@ -60,8 +60,61 @@ def update_employees_in_sheet(spreadsheet_id, sheet_name):
     print(f'Data updated in sheet {sheet_name}')
 
 
+def update_secret_santa_info_in_sheet(spreadsheet_id, sheet_name):
+    creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
+    creds = Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    service = build('sheets', 'v4', credentials=creds)
+
+    sheet = service.spreadsheets()
+    range_name = f'{sheet_name}!A:F'
+    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+    values = result.get('values', [])
+
+    if values:
+        headers = values[0]
+
+        body = {
+            'values': [[] for _ in range(len(values) - 1)]
+        }
+        sheet.values().update(
+            spreadsheetId=spreadsheet_id,
+            range=f'{sheet_name}!A2:F',
+            valueInputOption='RAW',
+            body=body
+        ).execute()
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute(
+            'SELECT receiver.name, giver.name, ssi.address, ssi.phone, ssi.request, ssi.aversions '
+            'FROM secret_santa_info ssi '
+            'JOIN employees receiver ON ssi.employee_id = receiver.id '
+            'JOIN employees giver ON ssi.secret_santa_id = giver.id '
+            'ORDER BY receiver.name'
+        )
+        employees_info = cursor.fetchall()
+
+    processed_info = [
+        [cell if cell is not None else ' ' for cell in row]
+        for row in employees_info
+    ]
+
+    body = {
+        'values': [headers] + processed_info
+    }
+    sheet.values().update(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        valueInputOption='RAW',
+        body=body
+    ).execute()
+
+    print(f'Data updated in sheet {sheet_name}')
+
+
 if __name__ == "__main__":
     SPREADSHEET_ID = '1UpYnTpYIaEKabvkU18hYZSFEunfvwLQvMgN69R7Ydaw'
     SHEET_NAME = 'BOT AUTOFILL'
 
     update_employees_in_sheet(SPREADSHEET_ID, SHEET_NAME)
+
+    update_secret_santa_info_in_sheet(SPREADSHEET_ID, 'Таємний Санта')
