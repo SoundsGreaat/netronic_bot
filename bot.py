@@ -1320,6 +1320,9 @@ def make_admin(call):
 def proceed_edit_employee(call):
     process_in_progress[call.message.chat.id] = 'edit_employee'
     edit_employee_data[call.from_user.id]['saved_message'] = call.message
+
+    additional_button = None
+
     if call.data.split('_')[2] == 's':
         parts = call.data.split('_')
         search_query = '_'.join(parts[3:-1])
@@ -1356,10 +1359,15 @@ def proceed_edit_employee(call):
     elif call.data.startswith('e_dob'):
         edit_employee_data[call.from_user.id]['column'] = ('date_of_birth', employee_id)
         message_text = f'🎂 Введіть нову дату народження для контакту <b>{employee_name}</b>:'
+        delete_date_of_birth_btn = types.InlineKeyboardButton(text='🗑️ Видалити дату народження',
+                                                              callback_data=f'del_dob_{employee_id}')
+        additional_button = delete_date_of_birth_btn
 
     back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=back_btn_callback)
     markup = types.InlineKeyboardMarkup()
     markup.add(back_btn)
+    if additional_button:
+        markup.add(additional_button)
     bot.delete_message(call.message.chat.id, call.message.message_id)
     sent_message = bot.send_message(call.message.chat.id, message_text, reply_markup=markup, parse_mode='HTML')
     edit_employee_data[call.from_user.id]['saved_markup'] = markup
@@ -1468,6 +1476,28 @@ def edit_employee_data_ans(message):
         del process_in_progress[message.chat.id]
         del edit_employee_data[message.chat.id]
         print(log_text)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('del_dob_'))
+@authorized_only(user_type='admins')
+def delete_date_of_birth(call):
+    employee_id = int(call.data.split('_')[2])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('UPDATE employees SET date_of_birth = NULL WHERE id = %s RETURNING name', (employee_id,))
+        employee_name = cursor.fetchone()[0]
+        conn.commit()
+    markup = call.message.reply_markup
+
+    new_markup = types.InlineKeyboardMarkup()
+    back_button = markup.keyboard[0][0]
+    back_button.text = '🔙 Назад'
+
+    new_markup.add(back_button)
+    bot.edit_message_text(f'✅ Дату народження контакту <b>{employee_name}</b> видалено.', call.message.chat.id,
+                          call.message.message_id, parse_mode='HTML', reply_markup=new_markup)
+    print(f'Employee {employee_id} date of birth deleted by {call.from_user.username}.')
+    del process_in_progress[call.message.chat.id]
+    del edit_employee_data[call.from_user.id]
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_'))
