@@ -13,6 +13,7 @@ from time import sleep
 
 from telebot import TeleBot, types, apihelper
 from openai import OpenAI
+from rapidfuzz import process
 
 from src.crm_api_functions import get_employee_pass_from_crm, add_employee_to_crm, delete_employee_from_crm, \
     update_employee_in_crm
@@ -1062,6 +1063,7 @@ def edit_employee(call):
         edit_username_btn_callback = f'e_uname_s_{search_query}_{employee_id}'
         edit_email_btn_callback = f'e_email_s_{search_query}_{employee_id}'
         edit_date_of_birth_btn_callback = f'e_dob_s_{search_query}_{employee_id}'
+        edit_sub_department_btn_callback = f'e_subdep_s_{search_query}_{employee_id}'
         show_keywords_btn_callback = f'show_keywords_s_{search_query}_{employee_id}'
         delete_btn_callback = f'delete_s_{search_query}_{employee_id}'
         back_btn_callback = f'profile_s_{search_query}_{employee_id}'
@@ -1080,6 +1082,9 @@ def edit_employee(call):
                                    f'{sub_department_id}_{employee_id}')
         edit_date_of_birth_btn_callback = (f'e_dob_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                            f'{sub_department_id}_{employee_id}')
+        edit_sub_department_btn_callback = (
+            f'e_subdep_{additional_instance}_{department_id}_{intermediate_department_id}_'
+            f'{sub_department_id}_{employee_id}')
         show_keywords_btn_callback = (
             f'show_keywords_{additional_instance}_{department_id}_{intermediate_department_id}_'
             f'{sub_department_id}_{employee_id}')
@@ -1095,6 +1100,8 @@ def edit_employee(call):
     edit_email_btn = types.InlineKeyboardButton(text='📧 Змінити email', callback_data=edit_email_btn_callback)
     edit_date_of_birth_btn = types.InlineKeyboardButton(text='🎂 Змінити дату народження',
                                                         callback_data=edit_date_of_birth_btn_callback)
+    edit_sub_department_btn = types.InlineKeyboardButton(text='🗄️ Змінити відділ',
+                                                         callback_data=edit_sub_department_btn_callback)
     show_keywords_btn = types.InlineKeyboardButton(text='🔍 Показати ключові слова',
                                                    callback_data=show_keywords_btn_callback)
     make_admin_btn = types.InlineKeyboardButton(text='⚠️ Переключити статус адміністратора',
@@ -1104,7 +1111,7 @@ def edit_employee(call):
 
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn, show_keywords_btn,
-               edit_email_btn, edit_date_of_birth_btn)
+               edit_email_btn, edit_date_of_birth_btn, edit_sub_department_btn)
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT telegram_user_id FROM employees WHERE id = %s', (employee_id,))
         employee_telegram_id = cursor.fetchone()[0]
@@ -1356,6 +1363,9 @@ def proceed_edit_employee(call):
         delete_date_of_birth_btn = types.InlineKeyboardButton(text='🗑️ Видалити дату народження',
                                                               callback_data=f'del_dob_{employee_id}')
         additional_button = delete_date_of_birth_btn
+    elif call.data.startswith('e_subdep'):
+        edit_employee_data[call.from_user.id]['column'] = ('sub_department_id', employee_id)
+        message_text = f'🗄️ Введіть приблизну назву відділу для контакту <b>{employee_name}</b>:'
 
     back_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data=back_btn_callback)
     markup = types.InlineKeyboardMarkup()
@@ -1400,6 +1410,22 @@ def edit_employee_data_ans(message):
     elif column == 'position':
         result_message_text = f'✅ Посаду контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
         log_text = f'Employee {employee_id} position changed to {new_value} by {message.from_user.username}.'
+
+    elif column == 'sub_department_id':
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT id, name FROM sub_departments')
+            sub_departments = cursor.fetchall()
+            original_sub_departments = [(sub_department[0], sub_department[1].strip()) for sub_department in
+                                        sub_departments]
+            sub_departments = [(id, name.lower()) for id, name in original_sub_departments]
+        query = new_value.lower()
+        best_match = process.extractOne(query, [name for id, name in sub_departments])
+        original_best_match = next((id, name) for id, name in original_sub_departments if name.lower() == best_match[0])
+        new_value = original_best_match[0]
+        sub_department_name = original_best_match[1]
+        result_message_text = (f'✅ Відділ контакту <b>{employee_name}</b> змінено на <b>{sub_department_name}</b>.'
+                               f'\nСхожість: {best_match[1]:.1f}%')
+        log_text = f'Employee {employee_id} sub_department_id changed to {new_value} by {message.from_user.username}.'
 
     elif column == 'telegram_username':
         searching_message = bot.send_message(message.chat.id, '🔄 Пошук користувача в Telegram...')

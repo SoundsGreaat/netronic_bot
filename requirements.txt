@@ -10,3 +10,4 @@ pandas~=2.2.2
 cryptography~=43.0.1
 google-api-python-client==2.154.0
 google==3.0.0
+rapidfuzz==3.11.0
