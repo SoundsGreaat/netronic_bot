@@ -1745,7 +1745,8 @@ def show_commendation(call):
     commendation_id = int(call.data.split('_')[1])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
-            'SELECT e_to.name, commendations.position, commendation_text, commendation_date, e_from.name FROM commendations '
+            'SELECT e_to.name, commendations.position, commendation_text, commendation_date, e_from.name '
+            'FROM commendations '
             'JOIN employees e_to ON employee_to_id = e_to.id '
             'JOIN employees e_from ON employee_from_id = e_from.id '
             'WHERE commendations.id = %s', (commendation_id,)
@@ -1756,10 +1757,35 @@ def show_commendation(call):
     image = make_card(employee_name, employee_position, commendation_text)
     message_text = (f'👨‍💻 <b>{employee_name}</b> | {formatted_date}\n\nВід <b>{employee_from_name}</b>'
                     f'\n{commendation_text}')
+    delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити', callback_data=f'delcommendation_{commendation_id}')
     hide_btn = types.InlineKeyboardButton(text='❌ Сховати', callback_data='hide_message')
     markup = types.InlineKeyboardMarkup()
-    markup.add(hide_btn)
+    markup.add(delete_btn, hide_btn)
     bot.send_photo(call.message.chat.id, image, caption=message_text, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('delcommendation_'))
+@authorized_only(user_type='admins')
+def delete_commendation(call):
+    commendation_id = int(call.data.split('_')[1])
+    confirm_delete_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення',
+                                                    callback_data=f'cdcommendation_{commendation_id}')
+    back_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data='hide_message')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(confirm_delete_btn, back_btn)
+    bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('cdcommendation_'))
+@authorized_only(user_type='admins')
+def confirm_delete_commendation(call):
+    commendation_id = int(call.data.split('_')[1])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('DELETE FROM commendations WHERE id = %s', (commendation_id,))
+        conn.commit()
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    print(f'Commendation {commendation_id} deleted by {call.from_user.username}.')
+    bot.send_message(call.message.chat.id, '✅ Подяку видалено.')
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'hide_message')
