@@ -1770,7 +1770,7 @@ def delete_commendation(call):
     commendation_id = int(call.data.split('_')[1])
     confirm_delete_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення',
                                                     callback_data=f'cdcommendation_{commendation_id}')
-    back_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data=f'commendation_{commendation_id}')
+    back_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення', callback_data='hide_message')
     markup = types.InlineKeyboardMarkup()
     markup.add(confirm_delete_btn, back_btn)
     bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=markup)
