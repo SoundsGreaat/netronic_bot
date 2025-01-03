@@ -47,6 +47,8 @@ edit_link_data = {
     'show_back_btn': {},
 }
 
+add_director_data = defaultdict(dict)
+
 add_link_data = defaultdict(dict)
 
 add_employee_data = defaultdict(dict)
@@ -655,6 +657,9 @@ def send_department_contacts(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('dep_'))
 @authorized_only(user_type='users')
 def send_department_contacts(call):
+    if process_in_progress.get(call.message.chat.id) == 'add_director':
+        del process_in_progress[call.message.chat.id]
+        del add_director_data[call.message.chat.id]
     additional_instance, department_id = map(int, call.data.split('_')[1:3])
     buttons = []
     if additional_instance:
@@ -672,10 +677,15 @@ def send_department_contacts(call):
                        (instance_id,))
         sub_departments = cursor.fetchall()
 
+    add_director = True
+
     for sub_department in sub_departments:
         sub_department_id = sub_department[0]
         sub_department_name = sub_department[1]
         sub_department_is_chief = sub_department[2]
+        if sub_department_is_chief:
+            add_director = False
+
         emoji = '👔' if sub_department_is_chief else '🗄️'
         btn = types.InlineKeyboardButton(text=f'{emoji} {sub_department_name}',
                                          callback_data=
@@ -688,12 +698,71 @@ def send_department_contacts(call):
     else:
         back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='departments')
 
+    if add_director:
+        add_director_btn = types.InlineKeyboardButton(text='➕ Додати керівника департементу',
+                                                      callback_data=f'add_dir_{additional_instance}_{department_id}_'
+                                                                    f'{intermediate_department_id}')
+    else:
+        add_director_btn = types.InlineKeyboardButton(text='🗑️ Видалити керівника департементу',
+                                                      callback_data=f'del_dir_{additional_instance}_{department_id}_'
+                                                                    f'{intermediate_department_id}')
+
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(*buttons)
+    if call.message.chat.id in authorized_ids['admins']:
+        markup.row(add_director_btn)
     markup.row(back_btn)
 
     bot.edit_message_text(f'Оберіть відділ:', call.message.chat.id,
                           call.message.message_id, reply_markup=markup, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('add_dir_'))
+@authorized_only(user_type='admins')
+def add_director(call):
+    additional_instance, department_id, intermediate_department_id = map(int, call.data.split('_')[2:])
+    process_in_progress[call.message.chat.id] = 'add_director'
+    add_director_data[call.message.chat.id]['department_id'] = department_id
+    add_director_data[call.message.chat.id]['additional_instance'] = additional_instance
+    add_director_data[call.message.chat.id]['intermediate_department_id'] = intermediate_department_id
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
+                                            callback_data=f'dep_{additional_instance}_{department_id}_'
+                                                          f'{intermediate_department_id}')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    sent_message = bot.send_message(call.message.chat.id, '👤 Введіть назву посади керівника'
+                                                          '\n Наприклад: <i>Виконавчий директор</i>',
+                                    reply_markup=markup, parse_mode='HTML')
+    add_director_data[call.message.chat.id]['saved_message'] = sent_message
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'add_director')
+@authorized_only(user_type='admins')
+def proceed_add_director(message):
+    department_id = add_director_data[message.chat.id]['department_id']
+    additional_instance = add_director_data[message.chat.id]['additional_instance']
+    intermediate_department_id = add_director_data[message.chat.id]['intermediate_department_id']
+    sent_message = add_director_data[message.chat.id]['saved_message']
+    if not additional_instance:
+        intermediate_department_id = None
+    director_position = message.text
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('''INSERT INTO sub_departments (name, is_chief_department, department_id,
+                           intermediate_department_id)
+                           VALUES (%s, %s, %s, %s) RETURNING id''',
+                       (director_position, True, department_id, intermediate_department_id))
+        conn.commit()
+    del process_in_progress[message.chat.id]
+    del add_director_data[message.chat.id]
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад',
+                                          callback_data=f'dep_{additional_instance}_{department_id}_'
+                                                        f'{intermediate_department_id}')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(back_btn)
+    bot.delete_message(message.chat.id, sent_message.message_id)
+    bot.send_message(message.chat.id, f'✅ Керівника департаменту успішно додано.', reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('sub_dep_'))
