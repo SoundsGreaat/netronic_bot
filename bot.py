@@ -162,6 +162,8 @@ main_menu.row(make_card_button, support_button)
 
 button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
 
+old_button_names = ['🎓 База знань', '🎅 Таємний Санта']
+
 
 @bot.message_handler(commands=['start', 'menu', 'help'])
 @authorized_only(user_type='users')
@@ -242,6 +244,14 @@ def new_member_handler(message):
                 cursor.execute('INSERT INTO telegram_chats (chat_id, chat_name) VALUES (%s, %s) ',
                                (message.chat.id, message.chat.title))
                 conn.commit()
+
+
+@bot.message_handler(func=lambda message: message.text in old_button_names)
+@authorized_only(user_type='users')
+def old_button_handler(message):
+    bot.send_message(message.chat.id, 'Ця кнопка була видалена або замінена.'
+                                      '\nБудь ласка, скористайтесь меню нижче.',
+                     reply_markup=main_menu)
 
 
 @bot.message_handler(func=lambda message: message.text == '🎓 Навчання')
