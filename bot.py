@@ -773,8 +773,22 @@ def send_sub_departments_contacts(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT id, name FROM employees WHERE sub_department_id = %s ORDER BY name',
-                       (sub_department_id,))
+        query = '''
+            SELECT DISTINCT e.id, e.name
+            FROM employees e
+            LEFT JOIN additional_sub_departments ad ON e.sub_department_id = ad.sub_department_id
+            WHERE e.sub_department_id = %s
+    
+            UNION
+    
+            SELECT DISTINCT e.id, e.name
+            FROM employees e
+            INNER JOIN additional_sub_departments ad ON e.id = ad.employee_id
+            WHERE ad.sub_department_id = %s
+            
+            ORDER BY name
+        '''
+        cursor.execute(query, (sub_department_id, sub_department_id))
         employees = cursor.fetchall()
 
     for employee in employees:
@@ -1024,6 +1038,7 @@ def skip_dob(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('profile_'))
 @authorized_only(user_type='users')
 def send_profile(call, call_data=None):
+    sub_department_id = None
     if call_data:
         chat_id = call.chat.id
         call.data = call_data
@@ -1055,24 +1070,63 @@ def send_profile(call, call_data=None):
 
     markup.row(back_btn)
 
-    with DatabaseConnection() as (conn, cursor):
-        cursor.execute('''SELECT emp.name,
-                                 departments.name     AS department,
-                                 sub_departments.name AS sub_department,
-                                 emp.position,
-                                 emp.phone,
-                                 emp.telegram_username,
-                                 intermediate_departments.name,
-                                 emp.email,
-                                 emp.date_of_birth
-                        FROM employees as emp
-                        JOIN sub_departments ON emp.sub_department_id = sub_departments.id
-                        JOIN departments ON sub_departments.department_id = departments.id
-                        LEFT JOIN intermediate_departments ON 
-                                                sub_departments.intermediate_department_id = intermediate_departments.id
-                        WHERE emp.id = %s
-                ''', (employee_id,))
-        employee_info = cursor.fetchone()
+    if not sub_department_id:
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('''SELECT emp.name,
+                                     departments.name     AS department,
+                                     sub_departments.name AS sub_department,
+                                     emp.position,
+                                     emp.phone,
+                                     emp.telegram_username,
+                                     intermediate_departments.name,
+                                     emp.email,
+                                     emp.date_of_birth
+                            FROM employees as emp
+                            JOIN sub_departments ON emp.sub_department_id = sub_departments.id
+                            JOIN departments ON sub_departments.department_id = departments.id
+                            LEFT JOIN intermediate_departments ON 
+                                                    sub_departments.intermediate_department_id = intermediate_departments.id
+                            WHERE emp.id = %s
+                    ''', (employee_id,))
+            employee_info = cursor.fetchone()
+
+    else:
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('''
+                SELECT emp.name,
+                       CASE 
+                           WHEN ad.sub_department_id IS NOT NULL THEN d2.name
+                           ELSE d1.name
+                       END AS department,
+                       
+                       CASE 
+                           WHEN ad.sub_department_id IS NOT NULL THEN sd2.name
+                           ELSE sd1.name
+                       END AS sub_department,
+                       
+                       CASE 
+                           WHEN ad.sub_department_id IS NOT NULL THEN ad.position
+                           ELSE emp.position
+                       END AS position,
+                       
+                       emp.phone,
+                       emp.telegram_username,
+                       intermediate_departments.name,
+                       emp.email,
+                       emp.date_of_birth
+                FROM employees AS emp
+                LEFT JOIN sub_departments AS sd1 ON emp.sub_department_id = sd1.id
+                LEFT JOIN departments AS d1 ON sd1.department_id = d1.id
+        
+                LEFT JOIN additional_sub_departments AS ad ON emp.id = ad.employee_id
+                LEFT JOIN sub_departments AS sd2 ON ad.sub_department_id = sd2.id
+                LEFT JOIN departments AS d2 ON sd2.department_id = d2.id
+        
+                LEFT JOIN intermediate_departments ON sd1.intermediate_department_id = intermediate_departments.id
+        
+                WHERE emp.id = %s AND (emp.sub_department_id = %s OR ad.sub_department_id = %s)
+            ''', (employee_id, sub_department_id, sub_department_id))
+            employee_info = cursor.fetchone()
 
     employee_name = employee_info[0]
     employee_department = employee_info[1]
@@ -1086,12 +1140,17 @@ def send_profile(call, call_data=None):
 
     office_string = f'\n<b>🏢 Офіс/служба</b>: {employee_intermediate_department}' if employee_intermediate_department \
         else ''
+
     sub_department_string = f'\n<b>🗄️ Відділ</b>: {employee_sub_department}' if (
             employee_sub_department != 'Відобразити співробітників') else ''
+
     phone_string = f'\n<b>📞 Телефон</b>: {employee_phone}' if employee_phone else f'\n<b>📞 Телефон</b>: Не вказано'
+
     username_string = f'\n<b>🆔 Юзернейм</b>: {employee_username}' \
         if employee_username else f'\n<b>🆔 Юзернейм</b>: Не вказано'
+
     email_string = f'\n<b>📧 Email</b>: {employee_email}' if employee_email else f'\n<b>📧 Email</b>: Не вказано'
+
     date_of_birth_string = f'\n<b>🎂 Дата народження</b>: {employee_date_of_birth}' \
         if employee_date_of_birth else f'\n<b>🎂 Дата народження</b>: Не вказано'
 
