@@ -57,6 +57,8 @@ openai_data = defaultdict(dict)
 
 make_card_data = defaultdict(dict)
 
+add_sub_department_data = defaultdict(dict)
+
 process_in_progress = {}
 
 COMMENDATIONS_PER_PAGE = 10
@@ -773,8 +775,22 @@ def send_sub_departments_contacts(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
 
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT id, name FROM employees WHERE sub_department_id = %s ORDER BY name',
-                       (sub_department_id,))
+        query = '''
+            SELECT DISTINCT e.id, e.name
+            FROM employees e
+            LEFT JOIN additional_sub_departments ad ON e.sub_department_id = ad.sub_department_id
+            WHERE e.sub_department_id = %s
+    
+            UNION
+    
+            SELECT DISTINCT e.id, e.name
+            FROM employees e
+            INNER JOIN additional_sub_departments ad ON e.id = ad.employee_id
+            WHERE ad.sub_department_id = %s
+            
+            ORDER BY name
+        '''
+        cursor.execute(query, (sub_department_id, sub_department_id))
         employees = cursor.fetchall()
 
     for employee in employees:
@@ -1024,6 +1040,7 @@ def skip_dob(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('profile_'))
 @authorized_only(user_type='users')
 def send_profile(call, call_data=None):
+    sub_department_id = None
     if call_data:
         chat_id = call.chat.id
         call.data = call_data
@@ -1055,24 +1072,63 @@ def send_profile(call, call_data=None):
 
     markup.row(back_btn)
 
-    with DatabaseConnection() as (conn, cursor):
-        cursor.execute('''SELECT emp.name,
-                                 departments.name     AS department,
-                                 sub_departments.name AS sub_department,
-                                 emp.position,
-                                 emp.phone,
-                                 emp.telegram_username,
-                                 intermediate_departments.name,
-                                 emp.email,
-                                 emp.date_of_birth
-                        FROM employees as emp
-                        JOIN sub_departments ON emp.sub_department_id = sub_departments.id
-                        JOIN departments ON sub_departments.department_id = departments.id
-                        LEFT JOIN intermediate_departments ON 
-                                                sub_departments.intermediate_department_id = intermediate_departments.id
-                        WHERE emp.id = %s
-                ''', (employee_id,))
-        employee_info = cursor.fetchone()
+    if not sub_department_id:
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('''SELECT emp.name,
+                                     departments.name     AS department,
+                                     sub_departments.name AS sub_department,
+                                     emp.position,
+                                     emp.phone,
+                                     emp.telegram_username,
+                                     intermediate_departments.name,
+                                     emp.email,
+                                     emp.date_of_birth
+                            FROM employees as emp
+                            JOIN sub_departments ON emp.sub_department_id = sub_departments.id
+                            JOIN departments ON sub_departments.department_id = departments.id
+                            LEFT JOIN intermediate_departments ON 
+                                                    sub_departments.intermediate_department_id = intermediate_departments.id
+                            WHERE emp.id = %s
+                    ''', (employee_id,))
+            employee_info = cursor.fetchone()
+
+    else:
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('''
+                SELECT emp.name,
+                       CASE 
+                           WHEN ad.sub_department_id IS NOT NULL THEN d2.name
+                           ELSE d1.name
+                       END AS department,
+                       
+                       CASE 
+                           WHEN ad.sub_department_id IS NOT NULL THEN sd2.name
+                           ELSE sd1.name
+                       END AS sub_department,
+                       
+                       CASE 
+                           WHEN ad.sub_department_id IS NOT NULL THEN ad.position
+                           ELSE emp.position
+                       END AS position,
+                       
+                       emp.phone,
+                       emp.telegram_username,
+                       intermediate_departments.name,
+                       emp.email,
+                       emp.date_of_birth
+                FROM employees AS emp
+                LEFT JOIN sub_departments AS sd1 ON emp.sub_department_id = sd1.id
+                LEFT JOIN departments AS d1 ON sd1.department_id = d1.id
+        
+                LEFT JOIN additional_sub_departments AS ad ON emp.id = ad.employee_id
+                LEFT JOIN sub_departments AS sd2 ON ad.sub_department_id = sd2.id
+                LEFT JOIN departments AS d2 ON sd2.department_id = d2.id
+        
+                LEFT JOIN intermediate_departments ON sd1.intermediate_department_id = intermediate_departments.id
+        
+                WHERE emp.id = %s AND (emp.sub_department_id = %s OR ad.sub_department_id = %s)
+            ''', (employee_id, sub_department_id, sub_department_id))
+            employee_info = cursor.fetchone()
 
     employee_name = employee_info[0]
     employee_department = employee_info[1]
@@ -1086,12 +1142,17 @@ def send_profile(call, call_data=None):
 
     office_string = f'\n<b>🏢 Офіс/служба</b>: {employee_intermediate_department}' if employee_intermediate_department \
         else ''
+
     sub_department_string = f'\n<b>🗄️ Відділ</b>: {employee_sub_department}' if (
             employee_sub_department != 'Відобразити співробітників') else ''
+
     phone_string = f'\n<b>📞 Телефон</b>: {employee_phone}' if employee_phone else f'\n<b>📞 Телефон</b>: Не вказано'
+
     username_string = f'\n<b>🆔 Юзернейм</b>: {employee_username}' \
         if employee_username else f'\n<b>🆔 Юзернейм</b>: Не вказано'
+
     email_string = f'\n<b>📧 Email</b>: {employee_email}' if employee_email else f'\n<b>📧 Email</b>: Не вказано'
+
     date_of_birth_string = f'\n<b>🎂 Дата народження</b>: {employee_date_of_birth}' \
         if employee_date_of_birth else f'\n<b>🎂 Дата народження</b>: Не вказано'
 
@@ -1171,6 +1232,8 @@ def edit_employee(call):
                                                         callback_data=edit_date_of_birth_btn_callback)
     edit_sub_department_btn = types.InlineKeyboardButton(text='🗄️ Змінити відділ',
                                                          callback_data=edit_sub_department_btn_callback)
+    manage_additional_departments_btn = types.InlineKeyboardButton(text='🗄️ Керування додатковими відділами',
+                                                                   callback_data=f'manage_add_{employee_id}_{False}')
     show_keywords_btn = types.InlineKeyboardButton(text='🔍 Показати ключові слова',
                                                    callback_data=show_keywords_btn_callback)
     make_admin_btn = types.InlineKeyboardButton(text='⚠️ Переключити статус адміністратора',
@@ -1180,7 +1243,7 @@ def edit_employee(call):
 
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn, show_keywords_btn,
-               edit_email_btn, edit_date_of_birth_btn, edit_sub_department_btn)
+               edit_email_btn, edit_date_of_birth_btn, edit_sub_department_btn, manage_additional_departments_btn)
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT telegram_user_id FROM employees WHERE id = %s', (employee_id,))
         employee_telegram_id = cursor.fetchone()[0]
@@ -1565,6 +1628,148 @@ def edit_employee_data_ans(message):
         del process_in_progress[message.chat.id]
         del edit_employee_data[message.chat.id]
         print(log_text)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('manage_add_'))
+@authorized_only(user_type='admins')
+def manage_additional_departments(call):
+    employee_id, edit_message = call.data.split('_')[2:]
+    employee_id = int(employee_id)
+    edit_message = True if edit_message == 'True' else False
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT sub_departments.name, additional_sub_departments.id '
+                       'FROM additional_sub_departments '
+                       'JOIN sub_departments ON additional_sub_departments.sub_department_id = sub_departments.id '
+                       'WHERE additional_sub_departments.employee_id = %s', (employee_id,))
+        additional_sub_departments = cursor.fetchall()
+
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    if additional_sub_departments:
+        for sub_department_name, add_sub_department_id in additional_sub_departments:
+            show_sub_department_btn = types.InlineKeyboardButton(text=f'🗄️ {sub_department_name}',
+                                                                 callback_data=f'manage_subdep_{employee_id}_'
+                                                                               f'{add_sub_department_id}')
+            markup.add(show_sub_department_btn)
+
+        message_text = 'Додаткові відділи:'
+    else:
+        message_text = 'Додаткові відділи відсутні.'
+    add_sub_department_btn = types.InlineKeyboardButton(text='➕ Додати відділ',
+                                                        callback_data=f'add_subdep_{employee_id}')
+    markup.add(add_sub_department_btn)
+    if edit_message:
+        bot.edit_message_text(message_text, call.message.chat.id, call.message.message_id,
+                              reply_markup=markup)
+        print(1)
+    else:
+        bot.send_message(call.message.chat.id, message_text, reply_markup=markup)
+        print(2)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('manage_subdep_'))
+@authorized_only(user_type='admins')
+def manage_sub_department(call):
+    employee_id, add_sub_department_id = map(int, call.data.split('_')[2:])
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT sub_departments.name, additional_sub_departments.position, employees.name '
+                       'FROM additional_sub_departments '
+                       'JOIN sub_departments ON additional_sub_departments.sub_department_id = sub_departments.id '
+                       'JOIN employees ON additional_sub_departments.employee_id = employees.id '
+                       'WHERE additional_sub_departments.id = %s AND additional_sub_departments.employee_id = %s',
+                       (add_sub_department_id, employee_id))
+        sub_department_name, position, employee_name = cursor.fetchone()
+
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=f'manage_add_{employee_id}_{True}')
+    delete_sub_department_btn = types.InlineKeyboardButton(text='🗑️ Видалити відділ',
+                                                           callback_data=f'del_subdep_{employee_id}_'
+                                                                         f'{add_sub_department_id}')
+    markup.add(delete_sub_department_btn, back_btn)
+    bot.edit_message_text(f'🗄️ {sub_department_name} ({position}) для контакту <b>{employee_name}</b>',
+                          call.message.chat.id,
+                          call.message.message_id, parse_mode='HTML', reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('add_subdep_'))
+@authorized_only(user_type='admins')
+def add_sub_department(call):
+    employee_id = int(call.data.split('_')[2])
+
+    process_in_progress[call.message.chat.id] = 'add_sub_department'
+    if add_sub_department_data.get(call.message.chat.id):
+        del add_sub_department_data[call.message.chat.id]
+
+    add_sub_department_data[call.message.chat.id]['employee_id'] = employee_id
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    sent_message = bot.send_message(call.message.chat.id, '🗄️ Введіть приблизну назву відділу:')
+    add_sub_department_data[call.message.chat.id]['saved_message'] = sent_message
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'add_sub_department')
+@authorized_only(user_type='admins')
+def add_sub_department_ans(message):
+    employee_id = add_sub_department_data[message.chat.id]['employee_id']
+    bot.delete_message(message.chat.id, message.message_id)
+    bot.delete_message(message.chat.id, add_sub_department_data[message.chat.id]['saved_message'].message_id)
+
+    if not add_sub_department_data[message.chat.id].get('sub_department_id'):
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT id, name FROM sub_departments')
+            sub_departments = cursor.fetchall()
+            original_sub_departments = [(sub_department[0], sub_department[1].strip()) for sub_department in
+                                        sub_departments]
+            sub_departments = [(id, name.lower()) for id, name in original_sub_departments]
+
+        query = message.text.lower()
+        best_match = process.extractOne(query, [name for id, name in sub_departments])
+        original_best_match = next((id, name) for id, name in original_sub_departments if name.lower() == best_match[0])
+
+        sub_department_id = original_best_match[0]
+        sub_department_name = original_best_match[1]
+        add_sub_department_data[message.chat.id]['sub_department_id'] = sub_department_id
+
+        sent_message = bot.send_message(message.chat.id,
+                                        f'Обрано відділ <b>{sub_department_name}</b> ({best_match[1]:.1f}%)'
+                                        f'\nВведіть посаду для відділу:',
+                                        parse_mode='HTML')
+        add_sub_department_data[message.chat.id]['saved_message'] = sent_message
+
+    elif not add_sub_department_data[message.chat.id].get('position'):
+        position = message.text
+        sub_department_id = add_sub_department_data[message.chat.id]['sub_department_id']
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('''
+            INSERT INTO additional_sub_departments (employee_id, sub_department_id, position)
+            VALUES (%s, %s, %s) 
+            
+            RETURNING (
+            SELECT name 
+            FROM sub_departments
+            WHERE sub_departments.id = additional_sub_departments.sub_department_id)
+            ''',
+                           (employee_id, sub_department_id, position))
+            conn.commit()
+            sub_department_name = cursor.fetchone()[0]
+
+        bot.send_message(message.chat.id, f'✅ Відділ <b>{sub_department_name}</b> ({position}) додано.',
+                         parse_mode='HTML')
+        del process_in_progress[message.chat.id]
+        del add_sub_department_data[message.chat.id]
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('del_subdep_'))
+@authorized_only(user_type='admins')
+def delete_sub_department(call):
+    employee_id, add_sub_department_id = map(int, call.data.split('_')[2:])
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('DELETE FROM additional_sub_departments WHERE id = %s', (add_sub_department_id,))
+        conn.commit()
+    call.data = f'manage_add_{employee_id}_{True}'
+    manage_additional_departments(call)
+    print(f'Employee {call.from_user.username} deleted additional sub_department {add_sub_department_id}.')
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('del_dob_'))
