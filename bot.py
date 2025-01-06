@@ -1,3 +1,4 @@
+import copy
 import math
 import os
 import re
@@ -174,16 +175,28 @@ old_button_names = ['🎓 База знань', '🎅 Таємний Санта'
 @authorized_only(user_type='users')
 def send_main_menu(message):
     with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name FROM employees WHERE telegram_user_id = %s', (message.chat.id,))
-        employee_name = cursor.fetchone()
+        cursor.execute('''
+        SELECT name, CASE WHEN admins.employee_id IS NOT NULL THEN TRUE ELSE FALSE END
+        FROM employees 
+        LEFT JOIN admins ON employees.id = admins.employee_id 
+        WHERE telegram_user_id = %s
+                       ''', (message.chat.id,))
+        employee_name, is_admin = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
+
+    if is_admin:
+        markup = copy.deepcopy(main_menu)
+        birthday_button = types.KeyboardButton('🎂 Дні народження')
+        markup.add(birthday_button)
+    else:
+        markup = main_menu
     with open('./assets/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
                                f'<b>Netronic</b>.'
                                f'\nЩо тебе цікавить?',
-                       reply_markup=main_menu, parse_mode='HTML')
+                       reply_markup=markup, parse_mode='HTML')
 
     if message.chat.id in authorized_ids['admins']:
         bot.send_message(message.chat.id, '🔐 Ви авторизовані як адміністратор.'
@@ -282,6 +295,68 @@ def send_business_processes(message, edit_message=False):
                               reply_markup=markup)
     else:
         bot.send_message(message.chat.id, '🔍 Оберіть бізнес-процес для перегляду:', reply_markup=markup)
+
+
+@bot.message_handler(func=lambda message: message.text == '🎂 Дні народження')
+@authorized_only(user_type='admins')
+def send_birthdays(message, edit_message=False):
+    month_dict = {
+        1: 'Січень 🌨️',
+        2: 'Лютий ❄️',
+        3: 'Березень 🌸',
+        4: 'Квітень 🌷',
+        5: 'Травень 🌼',
+        6: 'Червень 🌞',
+        7: 'Липень 🌴',
+        8: 'Серпень 🏖️',
+        9: 'Вересень 🍂',
+        10: 'Жовтень 🎃',
+        11: 'Листопад 🍁',
+        12: 'Грудень 🎄'
+    }
+    month_today = datetime.datetime.now().month
+    sorted_months = list(range(month_today, 13)) + list(range(1, month_today))
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for month in sorted_months:
+        month_btn = types.InlineKeyboardButton(text=month_dict[month], callback_data=f'birthdays_{month}')
+        markup.add(month_btn)
+    if edit_message:
+        bot.edit_message_text('🔍 Оберіть місяць:', message.chat.id, message.message_id,
+                              reply_markup=markup)
+    else:
+        bot.send_message(message.chat.id, '🔍 Оберіть місяць:', reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('birthdays_'))
+def send_birthdays_month(call):
+    month = int(call.data.split('_')[1])
+    today = datetime.datetime.now().date()
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name, date_of_birth '
+                       'FROM employees '
+                       'WHERE EXTRACT(MONTH FROM date_of_birth) = %s ', (month,))
+        birthdays = cursor.fetchall()
+    markup = types.InlineKeyboardMarkup()
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_birthdays')
+    markup.add(back_btn)
+    birthdays_sorted = sorted(birthdays, key=lambda x: x[1].day)
+    if birthdays:
+        birthday_messages = []
+        for name, date in birthdays_sorted:
+            if date.day == today.day and date.month == today.month:
+                birthday_messages.append(f'🎂 <b>{name} - {date.strftime("%d/%m/%Y")}</b>')
+            else:
+                birthday_messages.append(f'🎂 {name} - {date.strftime("%d/%m/%Y")}')
+        bot.edit_message_text('\n\n'.join(birthday_messages), call.message.chat.id,
+                              call.message.message_id, reply_markup=markup, parse_mode='HTML')
+    else:
+        bot.edit_message_text('У цьому місяці немає днів народження.', call.message.chat.id,
+                              call.message.message_id, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'back_to_birthdays')
+def back_to_birthdays(call):
+    send_birthdays(call.message, edit_message=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('b_process_'))
