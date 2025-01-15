@@ -1693,9 +1693,11 @@ def edit_employee_data_ans(message):
                                (telegram_user_id, employee_id))
                 print(f'Employee {employee_id} telegram_user_id changed to {telegram_user_id} by '
                       f'{message.from_user.username}.')
-                update_authorized_users(authorized_ids)
                 telegram_user_id_crm = telegram_user_id
             conn.commit()
+
+            if column == 'telegram_username':
+                update_authorized_users(authorized_ids)
 
         update_employee_in_crm(crm_id, name, phone, position, telegram_user_id_crm, telegram_username, email)
 
