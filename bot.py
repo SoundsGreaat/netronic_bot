@@ -1590,7 +1590,6 @@ def proceed_edit_employee(call):
 @authorized_only(user_type='admins')
 def edit_employee_data_ans(message):
     finish_function = True
-    telegram_user_id = None
     column, employee_id = edit_employee_data[message.chat.id]['column']
     new_value = message.text
     with DatabaseConnection() as (conn, cursor):
@@ -1688,13 +1687,17 @@ def edit_employee_data_ans(message):
             cursor.execute(f'UPDATE employees SET {column} = %s WHERE id = %s '
                            f'RETURNING crm_id, name, phone, position, telegram_user_id, telegram_username, email',
                            (new_value, employee_id))
-            crm_id, name, phone, position, telegram_user_id, telegram_username, email = cursor.fetchone()
-            if telegram_user_id is not None:
+            crm_id, name, phone, position, telegram_user_id_crm, telegram_username, email = cursor.fetchone()
+            if column == 'telegram_username':
                 cursor.execute('UPDATE employees SET telegram_user_id = %s WHERE id = %s',
                                (telegram_user_id, employee_id))
+                print(f'Employee {employee_id} telegram_user_id changed to {telegram_user_id} by '
+                      f'{message.from_user.username}.')
+                update_authorized_users(authorized_ids)
+                telegram_user_id_crm = telegram_user_id
             conn.commit()
 
-        update_employee_in_crm(crm_id, name, phone, position, telegram_user_id, telegram_username, email)
+        update_employee_in_crm(crm_id, name, phone, position, telegram_user_id_crm, telegram_username, email)
 
         bot.send_message(message.chat.id, result_message_text, parse_mode='HTML')
         bot.send_message(message.chat.id, text=saved_message.text, reply_markup=saved_message.reply_markup,
