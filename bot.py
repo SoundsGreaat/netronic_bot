@@ -1,4 +1,3 @@
-import copy
 import math
 import os
 import re
@@ -160,11 +159,13 @@ business_processes_button = types.KeyboardButton('💼 Бізнес-процес
 news_feed_button = types.KeyboardButton('🔗 Стрічка новин')
 contacts_button = types.KeyboardButton('📞 Контакти')
 make_card_button = types.KeyboardButton('📜 Меню подяк')
+birthday_button = types.KeyboardButton('🎂 Дні народження')
 support_button = types.KeyboardButton('💭 Зауваження по роботі боту')
 
 main_menu.row(knowledge_base_button, business_processes_button)
 main_menu.row(news_feed_button, contacts_button)
-main_menu.row(make_card_button, support_button)
+main_menu.row(make_card_button, birthday_button)
+main_menu.row(support_button)
 
 button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
 
@@ -185,18 +186,12 @@ def send_main_menu(message):
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
 
-    if is_admin:
-        markup = copy.deepcopy(main_menu)
-        birthday_button = types.KeyboardButton('🎂 Дні народження')
-        markup.add(birthday_button)
-    else:
-        markup = main_menu
     with open('./assets/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
                                f'<b>Netronic</b>.'
                                f'\nЩо тебе цікавить?',
-                       reply_markup=markup, parse_mode='HTML')
+                       reply_markup=main_menu, parse_mode='HTML')
 
     if message.chat.id in authorized_ids['admins']:
         bot.send_message(message.chat.id, '🔐 Ви авторизовані як адміністратор.'
@@ -298,7 +293,7 @@ def send_business_processes(message, edit_message=False):
 
 
 @bot.message_handler(func=lambda message: message.text == '🎂 Дні народження')
-@authorized_only(user_type='admins')
+@authorized_only(user_type='users')
 def send_birthdays(message, edit_message=False):
     month_dict = {
         1: 'Січень 🌨️',
@@ -328,13 +323,15 @@ def send_birthdays(message, edit_message=False):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('birthdays_'))
+@authorized_only(user_type='users')
 def send_birthdays_month(call):
     month = int(call.data.split('_')[1])
     today = datetime.datetime.now().date()
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT name, date_of_birth '
                        'FROM employees '
-                       'WHERE EXTRACT(MONTH FROM date_of_birth) = %s ', (month,))
+                       'WHERE EXTRACT(MONTH FROM date_of_birth) = %s '
+                       'ORDER BY date_of_birth', (month,))
         birthdays = cursor.fetchall()
     markup = types.InlineKeyboardMarkup()
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_birthdays')
@@ -344,9 +341,9 @@ def send_birthdays_month(call):
         birthday_messages = []
         for name, date in birthdays_sorted:
             if date.day == today.day and date.month == today.month:
-                birthday_messages.append(f'🎂 <b>{name} - {date.strftime("%d/%m/%Y")}</b>')
+                birthday_messages.append(f'🎂 <b>{name} - {date.strftime("%d/%m")}</b>')
             else:
-                birthday_messages.append(f'🎂 {name} - {date.strftime("%d/%m/%Y")}')
+                birthday_messages.append(f'🎂 {name} - {date.strftime("%d/%m")}')
         bot.edit_message_text('\n\n'.join(birthday_messages), call.message.chat.id,
                               call.message.message_id, reply_markup=markup, parse_mode='HTML')
     else:
@@ -1213,7 +1210,7 @@ def send_profile(call, call_data=None):
     employee_username = employee_info[5]
     employee_intermediate_department = employee_info[6]
     employee_email = employee_info[7]
-    employee_date_of_birth = employee_info[8].strftime('%d/%m/%Y') if employee_info[8] else None
+    employee_date_of_birth = employee_info[8].strftime('%d/%m') if employee_info[8] else None
 
     office_string = f'\n<b>🏢 Офіс/служба</b>: {employee_intermediate_department}' if employee_intermediate_department \
         else ''
