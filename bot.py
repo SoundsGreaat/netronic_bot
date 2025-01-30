@@ -2004,8 +2004,8 @@ def show_my_thanks(call):
         employee_id = cursor.fetchone()[0]
         cursor.execute('SELECT name, position FROM employees WHERE id = %s', (employee_id,))
         employee_name, employee_position = cursor.fetchone()
-        cursor.execute('SELECT id, commendation_text, commendation_date FROM commendations WHERE employee_to_id = %s',
-                       (employee_id,))
+        cursor.execute('SELECT id, commendation_text, commendation_date FROM commendations WHERE employee_to_id = %s '
+                       'ORDER BY commendation_date DESC', (employee_id,))
         commendations = cursor.fetchall()
 
     if not commendations:
@@ -2046,13 +2046,15 @@ def show_thanks_period(call):
                 'SELECT commendations.id, name, commendations.position, commendation_text, commendation_date '
                 'FROM commendations '
                 'JOIN employees ON employee_to_id = employees.id '
-                'WHERE commendation_date >= %s', (start_date,)
+                'WHERE commendation_date >= %s '
+                'ORDER BY commendation_date DESC', (start_date,)
             )
         else:
             cursor.execute(
                 'SELECT commendations.id, name, commendations.position, commendation_text, commendation_date '
                 'FROM commendations '
-                'JOIN employees ON employee_to_id = employees.id'
+                'JOIN employees ON employee_to_id = employees.id '
+                'ORDER BY commendation_date DESC'
             )
         commendations = cursor.fetchall()
 
