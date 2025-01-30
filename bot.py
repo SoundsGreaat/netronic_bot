@@ -21,6 +21,7 @@ from src.google_forms_filler import FormFiller
 from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
 from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
 from src.make_card import make_card
+from src.reminder import scheduler
 
 authorized_ids = {
     'users': set(),
@@ -62,6 +63,21 @@ add_sub_department_data = defaultdict(dict)
 process_in_progress = {}
 
 COMMENDATIONS_PER_PAGE = 10
+
+month_dict = {
+    1: 'Січень 🌨️',
+    2: 'Лютий ❄️',
+    3: 'Березень 🌸',
+    4: 'Квітень 🌷',
+    5: 'Травень 🌼',
+    6: 'Червень 🌞',
+    7: 'Липень 🌴',
+    8: 'Серпень 🏖️',
+    9: 'Вересень 🍂',
+    10: 'Жовтень 🎃',
+    11: 'Листопад 🍁',
+    12: 'Грудень 🎄'
+}
 
 
 def authorized_only(user_type):
@@ -295,20 +311,6 @@ def send_business_processes(message, edit_message=False):
 @bot.message_handler(func=lambda message: message.text == '🎂 Дні народження')
 @authorized_only(user_type='users')
 def send_birthdays(message, edit_message=False):
-    month_dict = {
-        1: 'Січень 🌨️',
-        2: 'Лютий ❄️',
-        3: 'Березень 🌸',
-        4: 'Квітень 🌷',
-        5: 'Травень 🌼',
-        6: 'Червень 🌞',
-        7: 'Липень 🌴',
-        8: 'Серпень 🏖️',
-        9: 'Вересень 🍂',
-        10: 'Жовтень 🎃',
-        11: 'Листопад 🍁',
-        12: 'Грудень 🎄'
-    }
     month_today = datetime.datetime.now().month
     sorted_months = list(range(month_today, 13)) + list(range(1, month_today))
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -773,11 +775,11 @@ def send_department_contacts(call):
         back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='departments')
 
     if add_director:
-        add_director_btn = types.InlineKeyboardButton(text='➕ Додати керівника департементу',
+        add_director_btn = types.InlineKeyboardButton(text='➕ Додати керівника департаменту',
                                                       callback_data=f'add_dir_{additional_instance}_{department_id}_'
                                                                     f'{intermediate_department_id}')
     else:
-        add_director_btn = types.InlineKeyboardButton(text='🗑️ Видалити керівника департементу',
+        add_director_btn = types.InlineKeyboardButton(text='🗑️ Видалити керівника департаменту',
                                                       callback_data=f'del_dir_{additional_instance}_{department_id}_'
                                                                     f'{intermediate_department_id}')
 
@@ -2532,10 +2534,40 @@ def proceed_contact_search(message, edit_message=False):
         user_data['messages_to_delete'][message.chat.id] = sent_message.message_id
 
 
+def send_birthday_notification():
+    user_ids = os.getenv('BIRTHDAY_NOTIFICATION_USER_IDS').split(',')
+    month = (datetime.date.today().month % 12) + 1
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name, date_of_birth '
+                       'FROM employees '
+                       'WHERE EXTRACT(MONTH FROM date_of_birth) = %s '
+                       'ORDER BY EXTRACT(DAY FROM date_of_birth)', (month,))
+        employees = cursor.fetchall()
+    birthdays = []
+    for name, date_of_birth in employees:
+        formatted_date = date_of_birth.strftime('%d/%m')
+        birthdays.append(f'🎉 {name} - {formatted_date}')
+        message = (f'🎂 Дні народження робітників на {month_dict[month]}:\n\n'
+                   + '\n'.join(birthdays))
+
+    for user_id in user_ids:
+        bot.send_message(user_id, message)
+
+
 def main():
+    scheduler.add_job(send_birthday_notification, 'cron', day=25, hour=17, minute=0, id='monthly_job',
+                      replace_existing=True)
+    scheduler.start()
+
     if test_connection():
         update_authorized_users(authorized_ids)
-        bot.infinity_polling()
+        threading.Thread(target=bot.infinity_polling, daemon=True).start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
 
 
 if __name__ == '__main__':
