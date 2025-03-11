@@ -251,7 +251,7 @@ def send_mass_message(message):
 
 
 @bot.message_handler(commands=['remind_password'])
-@authorized_only(user_type='admins')
+@authorized_only(user_type='users')
 def remind_password(message):
     spreadsheet_id = '1hG7Fsf8Uk9CDZ-OOP4OKUvcAr4URF0ZMPvyhgImRMV0'
     sheet_name = 'Main'
