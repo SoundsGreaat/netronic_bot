@@ -17,6 +17,7 @@ from rapidfuzz import process
 
 from src.crm_api_functions import get_employee_pass_from_crm, add_employee_to_crm, delete_employee_from_crm, \
     update_employee_in_crm
+from src.google_api_functions import read_credentials_from_sheet
 from src.google_forms_filler import FormFiller
 from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
 from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
@@ -247,6 +248,30 @@ def temp_authorize_user(message):
 def send_mass_message(message):
     process_in_progress[message.chat.id] = 'mass_message'
     bot.send_message(message.chat.id, 'Надішліть повідомлення, яке ви хочете розіслати.')
+
+
+@bot.message_handler(commands=['remind_password'])
+@authorized_only(user_type='admins')
+def remind_password(message):
+    spreadsheet_id = '1hG7Fsf8Uk9CDZ-OOP4OKUvcAr4URF0ZMPvyhgImRMV0'
+    sheet_name = 'Main'
+    telegram_username = f'@{message.from_user.username}'
+
+    sent_message = bot.send_message(message.chat.id, '🔍 Пошук вашого пароля...')
+
+    user_data = read_credentials_from_sheet(spreadsheet_id, sheet_name, telegram_username)
+    if user_data:
+        message_text = ''
+        for i, (key, value) in enumerate(user_data.items()):
+            message_text += f'{key}: <code>{value}</code>\n'
+            if i % 2 == 1:
+                message_text += '\n'
+    else:
+        message_text = 'Ваші дані не знайдено.'
+
+    sent_message = bot.edit_message_text(message_text, message.chat.id, sent_message.message_id, parse_mode='HTML')
+    sleep(30)
+    bot.delete_message(message.chat.id, sent_message.id)
 
 
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
