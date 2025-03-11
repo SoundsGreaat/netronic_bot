@@ -253,9 +253,15 @@ def send_mass_message(message):
 @bot.message_handler(commands=['remind_password'])
 @authorized_only(user_type='users')
 def remind_password(message):
+    allowed_usernames = ['@deynegas', '@luch_marina', '@Vasilyanskiy']
+
     spreadsheet_id = '1hG7Fsf8Uk9CDZ-OOP4OKUvcAr4URF0ZMPvyhgImRMV0'
     sheet_name = 'Main'
     telegram_username = f'@{message.from_user.username}'
+    if telegram_username not in allowed_usernames:
+        bot.send_message(message.chat.id, '🚫 Наразі функція на етапі тестування, '
+                                          'ми повідомимо вас, коли вона буде доступна.')
+        return
 
     sent_message = bot.send_message(message.chat.id, '🔍 Пошук вашого пароля...')
 
