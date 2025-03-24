@@ -1,5 +1,7 @@
 import os
 import json
+from datetime import date
+
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 
@@ -10,7 +12,7 @@ def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
     service = build('sheets', 'v4', credentials=creds)
 
     sheet = service.spreadsheets()
-    range_name = f'{sheet_name}!A:H'
+    range_name = f'{sheet_name}!A:I'
     result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
     values = result.get('values', [])
 
@@ -22,14 +24,14 @@ def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
         }
         sheet.values().update(
             spreadsheetId=spreadsheet_id,
-            range=f'{sheet_name}!A2:H',
+            range=f'{sheet_name}!A2:I',
             valueInputOption='RAW',
             body=body
         ).execute()
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
-            'SELECT emp.name, dep.name, inter.name, sub.name, position, telegram_username, email, phone '
+            'SELECT emp.name, dep.name, inter.name, sub.name, position, telegram_username, email, phone, date_of_birth '
             'FROM employees emp '
             'JOIN sub_departments sub ON emp.sub_department_id = sub.id '
             'JOIN departments dep ON sub.department_id = dep.id '
@@ -39,7 +41,7 @@ def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
         employees_info = cursor.fetchall()
 
     processed_info = [
-        [cell if cell is not None else ' ' for cell in row]
+        [cell.strftime('%Y-%m-%d') if isinstance(cell, date) else (cell if cell is not None else ' ') for cell in row]
         for row in employees_info
     ]
 
