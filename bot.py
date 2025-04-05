@@ -1322,6 +1322,14 @@ def edit_employee(call):
         back_btn_callback = (f'profile_{additional_instance}_{department_id}_{intermediate_department_id}_'
                              f'{sub_department_id}_{employee_id}')
 
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT name, employee_id FROM employees '
+                       'LEFT JOIN admins ON employees.id = admins.employee_id '
+                       'WHERE employees.id = %s', (employee_id,))
+        employee_name, employee_admin_id = cursor.fetchone()
+    is_admin = True if employee_admin_id else False
+    print(is_admin)
+
     edit_name_btn = types.InlineKeyboardButton(text='✏️ Змінити ім\'я', callback_data=edit_name_btn_callback)
     edit_phone_btn = types.InlineKeyboardButton(text='📞 Змінити телефон', callback_data=edit_phone_btn_callback)
     edit_position_btn = types.InlineKeyboardButton(text='💼 Змінити посаду', callback_data=edit_position_btn_callback)
@@ -1335,8 +1343,8 @@ def edit_employee(call):
                                                                    callback_data=f'manage_add_{employee_id}_{False}')
     show_keywords_btn = types.InlineKeyboardButton(text='🔍 Показати ключові слова',
                                                    callback_data=show_keywords_btn_callback)
-    make_admin_btn = types.InlineKeyboardButton(text='⚠️ Переключити статус адміністратора',
-                                                callback_data=f'make_admin_{employee_id}')
+    make_admin_btn_text = '✅ Зняти статус адміністратора' if is_admin else '⚠️ Призначити адміністратором'
+    make_admin_btn = types.InlineKeyboardButton(text=make_admin_btn_text, callback_data=f'make_admin_{employee_id}')
     delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити контакт', callback_data=delete_btn_callback)
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
 
@@ -1350,10 +1358,6 @@ def edit_employee(call):
         markup.row(make_admin_btn)
         markup.row(delete_btn)
     markup.row(back_btn)
-
-    with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name FROM employees WHERE id = %s', (employee_id,))
-        employee_name = cursor.fetchone()[0]
 
     bot.edit_message_text(f'📝 Редагування контакту <b>{employee_name}</b>:', call.message.chat.id,
                           call.message.message_id, reply_markup=markup, parse_mode='HTML')
