@@ -1,5 +1,5 @@
-from .database_setup import DatabaseConnection
-from ..google_api_functions import update_employees_in_sheet
+from .connection import DatabaseConnection
+from src.integrations.google_api_functions import update_employees_in_sheet
 
 
 def test_connection():

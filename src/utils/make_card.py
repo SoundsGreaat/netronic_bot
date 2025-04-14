@@ -3,7 +3,7 @@ from datetime import datetime
 
 
 def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=False):
-    font_path = './fonts/ARIALBD.TTF' if bold else './fonts/ARIAL.TTF'
+    font_path = 'assets/fonts/ARIALBD.TTF' if bold else 'assets/fonts/ARIAL.TTF'
     font = ImageFont.truetype(font_path, font_size)
 
     def split_text(text, font, max_width):
@@ -43,7 +43,7 @@ def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=Fals
 
 
 def make_card(name, position, thank_you_text):
-    image_path = './assets/commendation_template.png'
+    image_path = 'assets/images/commendation_template.png'
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
     draw_text(draw, 'ПОДЯКА', 68, (585, 115), (106, 157, 246), True)
@@ -56,5 +56,5 @@ def make_card(name, position, thank_you_text):
 
 
 if __name__ == '__main__':
-    make_card('Дубині Сергію', 'Інженер експерементального виробництва',
-              'За включеність в вирішення проблем по АГС').show()
+    make_card('Прізвище Ім\'я', 'Тестова посада',
+              'Текст подяки').show()

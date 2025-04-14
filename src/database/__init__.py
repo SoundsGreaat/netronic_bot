@@ -1,2 +1,2 @@
-from .database_setup import DatabaseConnection
-from .database_operations import test_connection, update_authorized_users, find_contact_by_name
+from .connection import DatabaseConnection
+from .operations import test_connection, update_authorized_users, find_contact_by_name

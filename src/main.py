@@ -5,112 +5,24 @@ import threading
 import asyncio
 import time
 import datetime
-
 import gforms
 
-from collections import defaultdict
 from time import sleep
-
-from telebot import TeleBot, types, apihelper
-from openai import OpenAI
+from telebot import types, apihelper
 from rapidfuzz import process
 
-from src.crm_api_functions import get_employee_pass_from_crm, add_employee_to_crm, delete_employee_from_crm, \
+from src.config import authorized_ids, user_data, edit_employee_data, add_keyword_data, edit_link_data, \
+    add_director_data, add_link_data, add_employee_data, openai_data, make_card_data, add_sub_department_data, \
+    process_in_progress, COMMENDATIONS_PER_PAGE, month_dict, client, assistant_id, bot, fernet_key
+from src.integrations.crm_api_functions import get_employee_pass_from_crm, add_employee_to_crm, delete_employee_from_crm, \
     update_employee_in_crm
-from src.google_api_functions import read_credentials_from_sheet
-from src.google_forms_filler import FormFiller
+from src.integrations.google_api_functions import read_credentials_from_sheet
+from src.integrations.google_forms_filler import FormFiller
 from src.database import DatabaseConnection, test_connection, update_authorized_users, find_contact_by_name
-from src.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
-from src.make_card import make_card
-from src.reminder import scheduler
-
-authorized_ids = {
-    'users': set(),
-    'admins': set(),
-    'moderators': set(),
-    'temp_users': set(),
-}
-
-user_data = {
-    'edit_link_mode': {},
-    'messages_to_delete': {},
-    'form_messages_to_delete': {},
-    'forms_ans': {},
-    'forms_timer': {},
-}
-
-edit_employee_data = defaultdict(dict)
-
-add_keyword_data = defaultdict(dict)
-
-edit_link_data = {
-    'saved_message': {},
-    'column': {},
-    'show_back_btn': {},
-}
-
-add_director_data = defaultdict(dict)
-
-add_link_data = defaultdict(dict)
-
-add_employee_data = defaultdict(dict)
-
-openai_data = defaultdict(dict)
-
-make_card_data = defaultdict(dict)
-
-add_sub_department_data = defaultdict(dict)
-
-process_in_progress = {}
-
-COMMENDATIONS_PER_PAGE = 10
-
-month_dict = {
-    1: 'Січень 🌨️',
-    2: 'Лютий ❄️',
-    3: 'Березень 🌸',
-    4: 'Квітень 🌷',
-    5: 'Травень 🌼',
-    6: 'Червень 🌞',
-    7: 'Липень 🌴',
-    8: 'Серпень 🏖️',
-    9: 'Вересень 🍂',
-    10: 'Жовтень 🎃',
-    11: 'Листопад 🍁',
-    12: 'Грудень 🎄'
-}
-
-
-def authorized_only(user_type):
-    def decorator(func):
-        def wrapper(data, *args, **kwargs):
-            try:
-                chat_id = data.chat.id
-            except AttributeError:
-                chat_id = data.from_user.id
-
-            if (chat_id in authorized_ids[user_type] or chat_id in authorized_ids['temp_users'] and user_type == 'users'
-                    or chat_id in authorized_ids['admins']):
-                func(data, *args, **kwargs)
-                print(f'User @{data.from_user.username} accessed {func.__name__}')
-            else:
-                with DatabaseConnection() as (conn, cursor):
-                    cursor.execute('''SELECT employees.telegram_username
-                                FROM admins
-                                JOIN employees ON admins.employee_id = employees.id
-                            ''')
-                    admin_list = [username[0] for username in cursor.fetchall()]
-                markup = types.ReplyKeyboardRemove()
-                print(
-                    f'Unauthorized user @{data.from_user.username} (chat id: {data.chat.id}) tried to access {func.__name__}')
-                bot.send_message(chat_id, f'Ви не авторизовані для використання цієї функції.'
-                                          f'\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.'
-                                          f'\n\nСписок адміністраторів: {", ".join(admin_list)}',
-                                 reply_markup=markup)
-
-        return wrapper
-
-    return decorator
+from src.handlers.authorization import authorized_only
+from src.integrations.telethon_functions import proceed_find_user_id, send_photo, decrypt_session, remove_user_from_chat
+from src.utils.make_card import make_card
+from src.utils.reminder import scheduler
 
 
 def callback(element, page_index, element_index, message):
@@ -162,11 +74,6 @@ def delete_messages(chat_id, dict_key='messages_to_delete'):
             pass
 
 
-client = OpenAI()
-assistant_id = os.getenv('OPENAI_ASSISTANT_ID')
-bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
-
-fernet_key = os.environ.get('FERNET_KEY')
 decrypt_session(fernet_key, input_file='src/userbot_session_encrypted', output_file='userbot_session.session')
 
 main_menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -203,7 +110,7 @@ def send_main_menu(message):
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
 
-    with open('./assets/netronic_logo.png', 'rb') as photo:
+    with open('assets/images/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
                                f'<b>Netronic</b>.'
