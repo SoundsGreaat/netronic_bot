@@ -4,8 +4,36 @@ from collections import defaultdict
 from openai import OpenAI
 from telebot import TeleBot
 
+FONT_ARIAL = '../assets/fonts/ARIAL.TTF'
+FONT_ARIAL_BOLD = '../assets/fonts/ARIALBD.TTF'
+COMMENDATION_TEMPLATE = '../assets/images/commendation_template.png'
+
+BIRTHDAY_NOTIFICATIONS_USER_IDS = os.getenv('BIRTHDAY_NOTIFICATION_USER_IDS')
+
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+BOT_TOKEN = os.environ.get('NETRONIC_BOT_TOKEN')
+
+OPENAI_ASSISTANT_ID = os.environ.get('OPENAI_ASSISTANT_ID')
+
+FERNET_KEY = os.environ.get('FERNET_KEY')
 
 COMMENDATIONS_PER_PAGE = 10
+
+MONTH_DICT = {
+    1: 'Січень 🌨️',
+    2: 'Лютий ❄️',
+    3: 'Березень 🌸',
+    4: 'Квітень 🌷',
+    5: 'Травень 🌼',
+    6: 'Червень 🌞',
+    7: 'Липень 🌴',
+    8: 'Серпень 🏖️',
+    9: 'Вересень 🍂',
+    10: 'Жовтень 🎃',
+    11: 'Листопад 🍁',
+    12: 'Грудень 🎄'
+}
 
 authorized_ids = {
     'users': set(),
@@ -46,22 +74,5 @@ add_sub_department_data = defaultdict(dict)
 
 process_in_progress = {}
 
-month_dict = {
-    1: 'Січень 🌨️',
-    2: 'Лютий ❄️',
-    3: 'Березень 🌸',
-    4: 'Квітень 🌷',
-    5: 'Травень 🌼',
-    6: 'Червень 🌞',
-    7: 'Липень 🌴',
-    8: 'Серпень 🏖️',
-    9: 'Вересень 🍂',
-    10: 'Жовтень 🎃',
-    11: 'Листопад 🍁',
-    12: 'Грудень 🎄'
-}
-
 client = OpenAI()
-assistant_id = os.getenv('OPENAI_ASSISTANT_ID')
-bot = TeleBot(os.getenv('NETRONIC_BOT_TOKEN'))
-fernet_key = os.environ.get('FERNET_KEY')
+bot = TeleBot(BOT_TOKEN)

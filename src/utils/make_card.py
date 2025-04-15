@@ -1,9 +1,11 @@
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
 
+from src.config import COMMENDATION_TEMPLATE, FONT_ARIAL, FONT_ARIAL_BOLD
+
 
 def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=False):
-    font_path = 'assets/fonts/ARIALBD.TTF' if bold else 'assets/fonts/ARIAL.TTF'
+    font_path = FONT_ARIAL_BOLD if bold else FONT_ARIAL
     font = ImageFont.truetype(font_path, font_size)
 
     def split_text(text, font, max_width):
@@ -43,7 +45,7 @@ def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=Fals
 
 
 def make_card(name, position, thank_you_text):
-    image_path = 'assets/images/commendation_template.png'
+    image_path = COMMENDATION_TEMPLATE
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
     draw_text(draw, 'ПОДЯКА', 68, (585, 115), (106, 157, 246), True)

@@ -2,6 +2,7 @@ from telebot import apihelper, types
 
 from src.config import user_data, bot
 from src.database import DatabaseConnection
+from src.handlers import authorized_only
 
 
 def delete_messages(chat_id, dict_key='messages_to_delete'):
@@ -53,3 +54,9 @@ def send_links(message, link_type, edit_message=False, show_back_btn=False):
                               reply_markup=markup)
     else:
         bot.send_message(message.chat.id, message_text, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'hide_message')
+@authorized_only(user_type='users')
+def hide_message(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)

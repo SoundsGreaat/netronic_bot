@@ -2,7 +2,8 @@ import datetime
 
 from telebot import types
 
-from src.config import bot, month_dict, authorized_ids, make_card_data
+from src.config import bot, MONTH_DICT, authorized_ids, make_card_data, process_in_progress
+from src.handlers import authorized_only
 from src.handlers.authorization import authorized_only
 from src.integrations.google_forms_filler import send_question_form
 from src.utils.messages import send_links
@@ -40,7 +41,7 @@ def send_birthdays(message, edit_message=False):
     sorted_months = list(range(month_today, 13)) + list(range(1, month_today))
     markup = types.InlineKeyboardMarkup(row_width=1)
     for month in sorted_months:
-        month_btn = types.InlineKeyboardButton(text=month_dict[month], callback_data=f'birthdays_{month}')
+        month_btn = types.InlineKeyboardButton(text=MONTH_DICT[month], callback_data=f'birthdays_{month}')
         markup.add(month_btn)
     if edit_message:
         bot.edit_message_text('🔍 Оберіть місяць:', message.chat.id, message.message_id,
@@ -61,6 +62,14 @@ def send_contacts_menu(message, edit_message=False):
         bot.edit_message_text('Оберіть дію:', message.chat.id, message.message_id, reply_markup=markup)
     else:
         bot.send_message(message.chat.id, 'Оберіть дію:', reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'back_to_send_contacts')
+@authorized_only(user_type='users')
+def back_to_send_contacts_menu(call):
+    send_contacts_menu(call.message, edit_message=True)
+    if process_in_progress.get(call.message.chat.id) == 'search':
+        del process_in_progress[call.message.chat.id]
 
 
 @bot.message_handler(func=lambda message: message.text == '📜 Меню подяк')

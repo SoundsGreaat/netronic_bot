@@ -1,7 +1,6 @@
-import os
 import psycopg2
 
-DATABASE_URL = os.environ.get('DATABASE_URL')
+from src.config import DATABASE_URL
 
 
 class DatabaseConnection:
