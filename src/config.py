@@ -1,6 +1,6 @@
 import os
-from collections import defaultdict
 
+from collections import defaultdict
 from openai import OpenAI
 from telebot import TeleBot
 

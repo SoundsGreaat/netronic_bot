@@ -2,7 +2,7 @@
 /docker-compose.yaml
 /temp_files/create_departments_and_employees.sql
 /find_user_id.session
-/userbot_session.session
+/sessions/userbot_session.session
 /temp_files/
 /bot_session.session
 /.run/
