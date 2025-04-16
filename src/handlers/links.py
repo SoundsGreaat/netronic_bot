@@ -5,12 +5,9 @@ from telebot import types
 
 from src.config import bot, process_in_progress, add_link_data, user_data, edit_link_data
 from src.database import DatabaseConnection
-from src.handlers.authorization import authorized_only
-from src.handlers.main_menu import send_business_processes
-from src.integrations.crm_api_functions import get_employee_pass_from_crm
-from src.integrations.google_forms_filler import send_question_form
-from src.utils import button_names
-from src.utils.messages import send_links
+from src.handlers import authorized_only, send_business_processes
+from src.integrations import get_employee_pass_from_crm, send_question_form
+from src.utils import button_names, send_links
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('b_process_'))

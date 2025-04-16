@@ -8,6 +8,9 @@ FONT_ARIAL = '../assets/fonts/ARIAL.TTF'
 FONT_ARIAL_BOLD = '../assets/fonts/ARIALBD.TTF'
 COMMENDATION_TEMPLATE = '../assets/images/commendation_template.png'
 
+SESSION_ENCRYPTED_PATH = '../sessions/userbot_session_encrypted'
+SESSION_DECRYPTED_PATH = '../sessions/userbot_session.session'
+
 BIRTHDAY_NOTIFICATIONS_USER_IDS = os.getenv('BIRTHDAY_NOTIFICATION_USER_IDS')
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
