@@ -3,7 +3,7 @@
 [![Static Badge](https://img.shields.io/badge/MIT-Lisence?style=for-the-badge&logo=github&label=License&color=yellow)](https://github.com/SoundsGreaat/netronic_bot?tab=MIT-1-ov-file)
 
 ## Description
-The project aims to simplify the process of obtaining employee contacts. Users can quickly find the necessary information using a bot in the messenger, which allows them to effectively organize communication in the organization. It is possible to ask artificial intelligence for help and get answers to work-related questions.
+The project aims to simplify the process of obtaining employee contacts. Users can quickly find the necessary information using a bot in the messenger, which allows them to effectively organize communication in the organization. It is possible to ask AI for help and get answers to work-related questions.
 In addition, the project allows administrators to easily edit contact information to always have up-to-date employee data.
 The project was implemented strictly to [**Netronic's**](https://netronic.com.ua/lp) order.
 
@@ -11,50 +11,58 @@ Telegram Bot name: [**@netronic_bot**](https://t.me/netronic_bot)
 
 ## Features
 ### User functionality
-- 🔒 **Restricted access**: Only those users who have been added to the database will have access to the bot.
-- 🔍 **Employee search**: You can search for the desired employee by name, position, or Telegram nickname.
-- 📝 **Interaction with Google Forms**: Users can fill out a Google form without clicking on a link by selecting the required form in the bot menu.
-- 🤖 **Artificial intelligence assistance**: Users can ask for help directly to artificial intelligence without leaving the chat with the bot. AI will analyze the company's documents and answer the user's question.
+- 🔒 **Restricted access**: Only users added to the database can access the bot.
+- 🔍 **Employee search**: Search for employees by name, position, or Telegram nickname.
+- 📝 **Google Forms integration**: Fill out Google Forms directly from the bot menu.
+- 🏆 **View commendations**: Users can view commendation cards created by administrators.
+- 🔔 **Credentials reminders**: Provide credentials for work accounts upon user request.
+- 🎉 **Birthday reminders**: Notifies users about upcoming employee birthdays.
+- 🤖 **AI assistance**: Ask AI for help with work-related questions and document analysis.
 
 ### Admin functionality
-- 💼 **Adding new employees**: Ability to add new employees to the database, including their name, title, contact information, and other necessary information.
-- 🖋️ **Editing employee data**: Edit existing employee data, such as name, contact information, position, etc.
-- 🗑️ **Deleting employees**: A feature to remove employees from the database if necessary.
-- 🕒 **Granting temporary access**: The ability to temporarily grant access to the bot to another user. When granting temporary access, user data does not need to be filled in, and the user is not included in the database.
-- 🔗 **Link editing mode**: Administrators can enter the link editing mode. In this mode, the functions of adding and editing links appear. When interacting with a link in this mode, the administrator will be prompted for several actions to modify or delete the link.
-- ✅ **Checking the correctness of filling**: If you enter an incorrect phone number, Telegram nickname, or link when filling out contact information, the bot will notify you of the error.
-- 🖼️ **Creating commendation cards**: Administrators can create commendation cards for employees using the `make_card.py` script.
-- 📝 **Filling Google Forms**: Administrators can fill out Google Forms programmatically using the `google_forms_filler.py` script.
-- 📤 **Sending messages and photos**: The bot can send messages and photos to users using the `telethon_functions.py` script.
+- 💼 **Add employees**: Add new employees to the database with their details.
+- 🖋️ **Edit employee data**: Update existing employee information.
+- 🗑️ **Delete employees**: Remove employees from the database when necessary.
+- 🕒 **Grant temporary access**: Temporarily allow bot access without adding users to the database.
+- 🔗 **Link editing mode**: Modify or delete links in the bot's menu.
+- ✅ **Validation checks**: Notify administrators of incorrect phone numbers, Telegram nicknames, or links.
+- 🖼️ **Create commendation cards**: Generate commendation cards using the `make_card.py` script.
+- 🔄 **CRM integration**: Automatically add or remove employees in the CRM system based on database updates.
+- 📊 **Google Sheets export**: Automatically export employee data to Google Sheets for convenience.
+- 🎂 **Birthday notifications**: Automatically send birthday reminders to administrators or employees.
+- 📝 **Programmatic Google Forms filling**: Use the `google_forms_filler.py` script to fill forms programmatically.
+- 📤 **Send messages and photos**: Use the `telethon_functions.py` script to send messages and photos to users.
 
 ## Technologies
-- **Python 3.12**: The main programming language used in the project.
-- **Telethon**: The project uses the Telethon library to interact with the Telegram Bot API.
-- **Telegram Bot API**: The project uses the Telegram Bot API to interact with users.
-- **PostgreSQL**: The project uses a PostgreSQL database to store employee data.
-- **GForms**: The project uses the gforms library to interact with Google Forms.
-- **OpenAI**: The project uses the OpenAI library to interact with AI.
-- **Pillow**: The project uses the Pillow library for image processing.
-- **Cryptography**: The project uses the Cryptography library for encrypting and decrypting session files.
+- **Python 3.12**: Main programming language.
+- **Telethon**: Library for interacting with the Telegram Bot API.
+- **Telegram Bot API**: Used for user interaction.
+- **PostgreSQL**: Database for storing employee data.
+- **SQLAlchemy**: Library for database ORM and SQL operations.
+- **GForms**: Library for Google Forms integration.
+- **OpenAI**: Library for AI-powered assistance.
+- **Pillow**: Library for image processing.
+- **Cryptography**: Library for encrypting and decrypting session files.
+- **RapidFuzz**: Library for fuzzy string matching and similarity calculations.
+- **APScheduler**: Library for scheduling tasks.
 
 ## How To Use It
 1. **Clone the repository**: `git clone https://github.com/SoundsGreaat/netronic_bot.git`
 2. **Install the required packages**: `pip install -r requirements.txt`
 3. **Generate secret keys**: Create a `.env` file in the root of the project and fill it with the following data:
     ```env
-   TELETHON_API_ID=your_api_id
-   TELETHON_API_HASH=your_api_hash
-   NETRONIC_BOT_TOKEN=your_bot_token
-   DATABASE_URL=your_database_url
-   OPENAI_API_KEY=your_openai_api_key
-   OPENAI_ASSISTANT_ID=your_openai_assistant_id
-   FERNET_KEY=your_fernet_key
-   FORM_URL=your_form_url
-   CRM_KEY=your_crm_key
-   CRM_URL=your_crm_url
-   GOOGLE_API_CREDENTIALS=your_google_api_credentials
-   TELETHON_API_ID_USERBOT=your_api_id_userbot
-   TELETHON_API_HASH_USERBOT=your_api_hash_userbot
+    TELETHON_API_ID=your_api_id
+    TELETHON_API_HASH=your_api_hash
+    NETRONIC_BOT_TOKEN=your_bot_token
+    DATABASE_URL=your_database_url
+    OPENAI_API_KEY=your_openai_api_key
+    OPENAI_ASSISTANT_ID=your_openai_assistant_id
+    FERNET_KEY=your_fernet_key
+    FORM_URL=your_form_url
+    CRM_KEY=your_crm_key
+    CRM_URL=your_crm_url
+    GOOGLE_API_CREDENTIALS=your_google_api_credentials
+    TELETHON_API_ID_USERBOT=your_api_id_userbot
+    TELETHON_API_HASH_USERBOT=your_api_hash_userbot
     ```
-4. **Create a database**: Create a PostgreSQL database, create tables using the `python create_tables.py` command and fill in the necessary data.
-5. **Run the bot**: `python bot.py`
+4. **Run the bot**: `python src/main.py`
