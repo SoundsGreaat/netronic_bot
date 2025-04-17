@@ -5,7 +5,8 @@ from src.config import bot, process_in_progress, user_data, add_director_data, a
     add_sub_department_data
 from src.database import DatabaseConnection, find_contact_by_name
 from src.handlers import authorized_only
-from src.utils import button_names, delete_messages
+from src.utils.main_menu_buttons import button_names
+from src.utils.messages import delete_messages
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'departments')

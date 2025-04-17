@@ -4,8 +4,8 @@ from telebot import types
 
 from src.config import bot, MONTH_DICT, authorized_ids, make_card_data, process_in_progress
 from src.handlers import authorized_only
-from src.integrations import send_question_form
-from src.utils import send_links
+from src.integrations.google_forms_filler import send_question_form
+from src.utils.messages import send_links
 
 
 @bot.message_handler(func=lambda message: message.text == '🎓 Навчання')
@@ -31,6 +31,12 @@ def send_business_processes(message, edit_message=False):
                               reply_markup=markup)
     else:
         bot.send_message(message.chat.id, '🔍 Оберіть бізнес-процес для перегляду:', reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'business_processes')
+@authorized_only(user_type='users')
+def send_business_processes_menu(call):
+    send_business_processes(call.message, edit_message=True)
 
 
 @bot.message_handler(func=lambda message: message.text == '🎂 Дні народження')

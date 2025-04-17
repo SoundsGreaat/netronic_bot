@@ -5,9 +5,11 @@ from telebot import types
 
 from src.config import bot, process_in_progress, add_link_data, user_data, edit_link_data
 from src.database import DatabaseConnection
-from src.handlers import authorized_only, send_business_processes
-from src.integrations import get_employee_pass_from_crm, send_question_form
-from src.utils import button_names, send_links
+from src.handlers import authorized_only
+from src.integrations.crm_api_functions import get_employee_pass_from_crm
+from src.integrations.google_forms_filler import send_question_form
+from src.utils.main_menu_buttons import button_names
+from src.utils.messages import send_links
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('b_process_'))
@@ -16,12 +18,6 @@ def send_business_process(call):
     split_data = call.data.split('_', 2)
     process_name = '_'.join(split_data[2:])
     send_links(call.message, process_name, edit_message=True, show_back_btn=True)
-
-
-@bot.callback_query_handler(func=lambda call: call.data == 'business_processes')
-@authorized_only(user_type='users')
-def send_business_processes_menu(call):
-    send_business_processes(call.message, edit_message=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_link_'))

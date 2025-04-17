@@ -2,7 +2,7 @@ from telebot import types
 
 
 def create_main_menu():
-    main_menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
     knowledge_base_button = types.KeyboardButton('🎓 Навчання')
     business_processes_button = types.KeyboardButton('💼 Бізнес-процеси')
@@ -12,12 +12,12 @@ def create_main_menu():
     birthday_button = types.KeyboardButton('🎂 Дні народження')
     support_button = types.KeyboardButton('💭 Зауваження по роботі боту')
 
-    main_menu.row(knowledge_base_button, business_processes_button)
-    main_menu.row(news_feed_button, contacts_button)
-    main_menu.row(make_card_button, birthday_button)
-    main_menu.row(support_button)
+    markup.row(knowledge_base_button, business_processes_button)
+    markup.row(news_feed_button, contacts_button)
+    markup.row(make_card_button, birthday_button)
+    markup.row(support_button)
 
-    return main_menu
+    return markup
 
 
 main_menu = create_main_menu()

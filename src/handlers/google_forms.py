@@ -1,6 +1,6 @@
 from src.config import process_in_progress, bot, user_data
 from src.handlers.authorization import authorized_only
-from src.utils import button_names
+from src.utils.main_menu_buttons import button_names
 
 
 @bot.message_handler(

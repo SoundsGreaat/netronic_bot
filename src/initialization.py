@@ -1,6 +1,6 @@
 from src.config import bot, FERNET_KEY, SESSION_ENCRYPTED_PATH, SESSION_DECRYPTED_PATH, authorized_ids
 from src.database import test_connection, update_authorized_users
-from src.integrations import decrypt_session
+from src.integrations.telethon_functions import decrypt_session
 
 
 def initialize_bot():

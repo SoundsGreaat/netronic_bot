@@ -7,8 +7,9 @@ from telebot import types, apihelper
 from src.config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data
 from src.database import DatabaseConnection, find_contact_by_name
 from src.handlers import authorized_only
-from src.integrations import send_photo
-from src.utils import make_card, button_names
+from src.integrations.telethon_functions import send_photo
+from src.utils.make_card import make_card
+from src.utils.main_menu_buttons import button_names
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'show_thanks')

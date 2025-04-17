@@ -1,5 +1,5 @@
 from src.initialization import initialize_bot
-from utils import start_scheduler
+from utils.scheduler import start_scheduler
 
 from handlers import *
 

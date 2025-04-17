@@ -17,12 +17,12 @@ from .employees import add_employee, proceed_add_employee_data, skip_phone, skip
 
 from .google_forms import callback_ans, cancel_form_filling
 
-from .links import send_business_process, send_business_processes_menu, add_link, proceed_add_link_data, send_form, \
+from .links import send_business_process, add_link, proceed_add_link_data, send_form, \
     send_helpdesk, show_helpdesk_password, edit_link, proceed_edit_link_data, delete_link_confirmation, delete_link, \
     back_to_send_links
 
 from .main_menu import send_knowledge_base, send_business_processes, send_birthdays, send_contacts_menu, thanks_menu, \
-    send_useful_links, send_form, back_to_send_contacts_menu
+    send_useful_links, send_form, back_to_send_contacts_menu, send_business_processes_menu
 
 from .commendations import show_thanks, show_my_thanks, show_thanks_period, show_commendation, delete_commendation, \
     confirm_delete_commendation, send_thanks, proceed_thanks_search, proceed_send_thanks, send_thanks_name, \
