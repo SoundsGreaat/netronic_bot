@@ -1,6 +1,6 @@
 from time import sleep
 
-from src.utils import *
+from src.utils.main_menu_buttons import main_menu, button_names, old_button_names
 from src.config import bot, authorized_ids, user_data, process_in_progress
 from src.database import DatabaseConnection, update_authorized_users
 from src.handlers.authorization import authorized_only
