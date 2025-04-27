@@ -58,6 +58,53 @@ def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
     print(f'Data updated in sheet {sheet_name}')
 
 
+def update_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
+    creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
+    creds = Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    service = build('sheets', 'v4', credentials=creds)
+
+    sheet = service.spreadsheets()
+    range_name = f'{sheet_name}!A:E'
+    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+    values = result.get('values', [])
+
+    headers = values[0] if values else []
+
+    sheet.values().clear(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        body={}
+    ).execute()
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute(
+            'SELECT e_from.name, e_to.name, comm.commendation_text, value.name, comm.commendation_date '
+            'FROM commendations comm '
+            'JOIN employees e_from ON comm.employee_from_id = e_from.id '
+            'JOIN employees e_to ON comm.employee_to_id = e_to.id '
+            'LEFT JOIN commendation_values value ON comm.value_id = value.id '
+            'ORDER BY comm.id'
+        )
+        commendations_info = cursor.fetchall()
+
+    processed_info = [
+        [cell.strftime('%Y-%m-%d') if isinstance(cell, date) else (cell if cell is not None else ' ') for cell in row]
+        for row in commendations_info
+    ]
+
+    body = {
+        'values': [headers] + processed_info if headers else processed_info
+    }
+    sheet.values().update(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        valueInputOption='RAW',
+        body=body
+    ).execute()
+
+    print(f'Data updated in sheet {sheet_name}')
+
+
 def read_credentials_from_sheet(spreadsheet_id, sheet_name, telegram_username):
     creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
     creds = Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])

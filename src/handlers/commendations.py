@@ -7,6 +7,7 @@ from telebot import types, apihelper
 from src.config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data
 from src.database import DatabaseConnection, find_contact_by_name
 from src.handlers import authorized_only
+from src.integrations.google_api_functions import update_commendations_in_sheet
 from src.integrations.telethon_functions import send_photo
 from src.utils.make_card import make_card
 from src.utils.main_menu_buttons import button_names
@@ -129,18 +130,21 @@ def show_commendation(call):
     commendation_id = int(call.data.split('_')[1])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
-            'SELECT e_to.name, commendations.position, commendation_text, commendation_date, e_from.name '
+            'SELECT e_to.name, commendations.position, commendation_text, commendation_date, e_from.name, values.name '
             'FROM commendations '
             'JOIN employees e_to ON employee_to_id = e_to.id '
             'JOIN employees e_from ON employee_from_id = e_from.id '
+            'LEFT JOIN commendation_values values ON commendations.value_id = values.id '
             'WHERE commendations.id = %s', (commendation_id,)
         )
-        employee_name, employee_position, commendation_text, commendation_date, employee_from_name = cursor.fetchone()
+        employee_name, employee_position, commendation_text, commendation_date, employee_from_name, \
+            value_name = cursor.fetchone()
 
     formatted_date = commendation_date.strftime('%d.%m.%Y')
     image = make_card(employee_name, employee_position, commendation_text)
     message_text = (f'👨‍💻 <b>{employee_name}</b> | {formatted_date}\n\nВід <b>{employee_from_name}</b>'
-                    f'\n{commendation_text}')
+                    f'\nЦінність: <b>{value_name if value_name else "Не вказано"}</b>'
+                    f'\n\n{commendation_text}')
     delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити', callback_data=f'delcommendation_{commendation_id}')
     hide_btn = types.InlineKeyboardButton(text='❌ Сховати', callback_data='hide_message')
     markup = types.InlineKeyboardMarkup()
@@ -167,6 +171,10 @@ def confirm_delete_commendation(call):
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('DELETE FROM commendations WHERE id = %s', (commendation_id,))
         conn.commit()
+
+    update_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I',
+                                  'BOT AUTOFILL COMMENDATIONS',
+                                  DatabaseConnection)
     bot.delete_message(call.message.chat.id, call.message.message_id)
     print(f'Commendation {commendation_id} deleted by {call.from_user.username}.')
     bot.send_message(call.message.chat.id, '✅ Подяку видалено.')
@@ -226,12 +234,40 @@ def proceed_send_thanks(call):
     employee_name = employee_data[0]
     employee_position = employee_data[1]
     employee_telegram_id = employee_data[2]
+
+    employee_name_basic = employee_name
     make_card_data[call.message.chat.id]['employee_id'] = employee_id
+    make_card_data[call.message.chat.id]['employee_name_basic'] = employee_name_basic
     make_card_data[call.message.chat.id]['employee_position'] = employee_position
     make_card_data[call.message.chat.id]['employee_telegram_id'] = employee_telegram_id
+    markup = types.InlineKeyboardMarkup(row_width=1)
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id, name FROM commendation_values')
+        values = cursor.fetchall()
+
+    for value in values:
+        value_id = value[0]
+        value_name = value[1]
+        btn = types.InlineKeyboardButton(text=f'{value_name}', callback_data=f'value_{value_id}')
+        markup.add(btn)
     sent_message = bot.edit_message_text(
-        f'📝 Введіть ім\'я для співробітника <b>{employee_name}</b> у давальному відмінку:',
+        f'Виберіть цінність, якій відповідає подяка:',
+        call.message.chat.id, call.message.message_id, parse_mode='HTML', reply_markup=markup)
+    make_card_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('value_'))
+@authorized_only(user_type='moderators')
+def select_value(call):
+    value_id = int(call.data.split('_')[1])
+    make_card_data[call.message.chat.id]['value'] = value_id
+    employee_name_basic = make_card_data[call.message.chat.id]['employee_name_basic']
+
+    sent_message = bot.edit_message_text(
+        f'📝 Введіть ім\'я для співробітника <b>{employee_name_basic}</b> у давальному відмінку:',
         call.message.chat.id, call.message.message_id, parse_mode='HTML')
+
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
 
@@ -281,6 +317,7 @@ def confirm_send_thanks(call):
     employee_id = make_card_data[call.message.chat.id]['employee_id']
     commendation_text = make_card_data[call.message.chat.id]['thanks_text']
     employee_position = make_card_data[call.message.chat.id]['employee_position']
+    value_id = make_card_data[call.message.chat.id]['value']
     commendation_date = datetime.datetime.now().date()
 
     with DatabaseConnection() as (conn, cursor):
@@ -288,18 +325,22 @@ def confirm_send_thanks(call):
         sender_id = cursor.fetchone()[0]
         cursor.execute(
             'INSERT INTO commendations ('
-            'employee_to_id, employee_from_id, commendation_text, commendation_date, position'
-            ') '
-            'VALUES (%s, %s, %s, %s, %s)',
-            (employee_id, sender_id, commendation_text, commendation_date, employee_position)
+            'employee_to_id, employee_from_id, commendation_text, commendation_date, position, '
+            'value_id) '
+            'VALUES (%s, %s, %s, %s, %s, %s)',
+            (employee_id, sender_id, commendation_text, commendation_date, employee_position, value_id)
         )
         conn.commit()
+
+    update_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I',
+                                  'BOT AUTOFILL COMMENDATIONS',
+                                  DatabaseConnection)
 
     try:
         bot.send_photo(recipient_id, image, caption='📩 Вам було надіслано подяку.')
     except apihelper.ApiTelegramException as e:
         if e.error_code == 400 and "chat not found" in e.description:
-            bot.send_message(call.message.chat.id, '🚫 Користувач не знайдений. Надслисаю подяку як юзербот.')
+            bot.send_message(call.message.chat.id, '🚫 Користувача не знайдено. Надсилаю подяку як юзербот.')
             print('Sending image to user failed. Chat not found. Trying to send image as user.')
             asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.'))
 
