@@ -1,12 +1,12 @@
 from rapidfuzz import process
 from telebot import types, apihelper
 
-from src.config import bot, process_in_progress, user_data, add_director_data, authorized_ids, add_employee_data, \
+from config import bot, process_in_progress, user_data, add_director_data, authorized_ids, add_employee_data, \
     add_sub_department_data
-from src.database import DatabaseConnection, find_contact_by_name
-from src.handlers import authorized_only
-from src.utils.main_menu_buttons import button_names
-from src.utils.messages import delete_messages
+from database import DatabaseConnection, find_contact_by_name
+from handlers import authorized_only
+from utils.main_menu_buttons import button_names
+from utils.messages import delete_messages
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'departments')

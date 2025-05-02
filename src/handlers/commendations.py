@@ -4,13 +4,13 @@ import math
 
 from telebot import types, apihelper
 
-from src.config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data
-from src.database import DatabaseConnection, find_contact_by_name
-from src.handlers import authorized_only
-from src.integrations.google_api_functions import update_commendations_in_sheet
-from src.integrations.telethon_functions import send_photo
-from src.utils.make_card import make_card
-from src.utils.main_menu_buttons import button_names
+from config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data
+from database import DatabaseConnection, find_contact_by_name
+from handlers import authorized_only
+from integrations.google_api_functions import update_commendations_in_sheet
+from integrations.telethon_functions import send_photo
+from utils.make_card import make_card
+from utils.main_menu_buttons import button_names
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'show_thanks')

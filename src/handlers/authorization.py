@@ -1,7 +1,7 @@
 from telebot import types, apihelper
 
-from src.database import DatabaseConnection
-from src.config import authorized_ids, bot, process_in_progress
+from database import DatabaseConnection
+from config import authorized_ids, bot, process_in_progress
 
 
 def authorized_only(user_type):

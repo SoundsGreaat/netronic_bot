@@ -3,10 +3,10 @@ from time import sleep
 
 from telebot import types
 
-from src.config import bot, process_in_progress, openai_data, client, OPENAI_ASSISTANT_ID
-from src.database import DatabaseConnection
-from src.handlers import authorized_only
-from src.utils.main_menu_buttons import button_names
+from config import bot, process_in_progress, openai_data, client, OPENAI_ASSISTANT_ID
+from database import DatabaseConnection
+from handlers import authorized_only
+from utils.main_menu_buttons import button_names
 
 
 @bot.message_handler(func=lambda message: message.text == '💭 Маєш питання?')

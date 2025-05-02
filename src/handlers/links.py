@@ -3,13 +3,13 @@ from time import sleep
 
 from telebot import types
 
-from src.config import bot, process_in_progress, add_link_data, user_data, edit_link_data
-from src.database import DatabaseConnection
-from src.handlers import authorized_only
-from src.integrations.crm_api_functions import get_employee_pass_from_crm
-from src.integrations.google_forms_filler import send_question_form
-from src.utils.main_menu_buttons import button_names
-from src.utils.messages import send_links
+from config import bot, process_in_progress, add_link_data, user_data, edit_link_data
+from database import DatabaseConnection
+from handlers import authorized_only
+from integrations.crm_api_functions import get_employee_pass_from_crm
+from integrations.google_forms_filler import send_question_form
+from utils.main_menu_buttons import button_names
+from utils.messages import send_links
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('b_process_'))

@@ -5,12 +5,12 @@ import re
 from rapidfuzz import process
 from telebot import types
 
-from src.config import bot, process_in_progress, edit_employee_data, authorized_ids, add_employee_data, add_keyword_data
-from src.database import DatabaseConnection, update_authorized_users
-from src.handlers import authorized_only
-from src.integrations.crm_api_functions import add_employee_to_crm, delete_employee_from_crm, update_employee_in_crm
-from src.integrations.telethon_functions import proceed_find_user_id, remove_user_from_chat
-from src.utils.main_menu_buttons import button_names
+from config import bot, process_in_progress, edit_employee_data, authorized_ids, add_employee_data, add_keyword_data
+from database import DatabaseConnection, update_authorized_users
+from handlers import authorized_only
+from integrations.crm_api_functions import add_employee_to_crm, delete_employee_from_crm, update_employee_in_crm
+from integrations.telethon_functions import proceed_find_user_id, remove_user_from_chat
+from utils.main_menu_buttons import button_names
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_employee_'))

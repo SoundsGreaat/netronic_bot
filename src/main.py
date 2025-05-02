@@ -1,4 +1,4 @@
-from src.initialization import initialize_bot
+from initialization import initialize_bot
 from utils.scheduler import start_scheduler
 
 from handlers import *

@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
 
-from src.config import COMMENDATION_TEMPLATE, FONT_ARIAL, FONT_ARIAL_BOLD
+from config import COMMENDATION_TEMPLATE, FONT_ARIAL, FONT_ARIAL_BOLD
 
 
 def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=False):

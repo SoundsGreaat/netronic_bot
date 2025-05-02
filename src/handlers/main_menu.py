@@ -2,10 +2,10 @@ import datetime
 
 from telebot import types
 
-from src.config import bot, MONTH_DICT, authorized_ids, make_card_data, process_in_progress
-from src.handlers import authorized_only
-from src.integrations.google_forms_filler import send_question_form
-from src.utils.messages import send_links
+from config import bot, MONTH_DICT, authorized_ids, make_card_data, process_in_progress
+from handlers import authorized_only
+from integrations.google_forms_filler import send_question_form
+from utils.messages import send_links
 
 
 @bot.message_handler(func=lambda message: message.text == '🎓 Навчання')

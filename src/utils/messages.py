@@ -1,7 +1,7 @@
 from telebot import apihelper, types
 
-from src.config import user_data, bot
-from src.database import DatabaseConnection
+from config import user_data, bot
+from database import DatabaseConnection
 
 
 def delete_messages(chat_id, dict_key='messages_to_delete'):

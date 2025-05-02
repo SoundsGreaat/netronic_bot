@@ -4,8 +4,8 @@ import os
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
-from src.config import BIRTHDAY_NOTIFICATIONS_USER_IDS, MONTH_DICT, bot
-from src.database import DatabaseConnection
+from config import BIRTHDAY_NOTIFICATIONS_USER_IDS, MONTH_DICT, bot
+from database import DatabaseConnection
 
 db_url = os.getenv('SCHEDULE_DATABASE_URL')
 

@@ -1,6 +1,6 @@
 import psycopg2
 
-from src.config import DATABASE_URL
+from config import DATABASE_URL
 
 
 class DatabaseConnection:

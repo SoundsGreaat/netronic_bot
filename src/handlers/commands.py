@@ -1,10 +1,10 @@
 from time import sleep
 
-from src.utils.main_menu_buttons import main_menu, button_names, old_button_names
-from src.config import bot, authorized_ids, user_data, process_in_progress
-from src.database import DatabaseConnection, update_authorized_users
-from src.handlers.authorization import authorized_only
-from src.integrations.google_api_functions import read_credentials_from_sheet
+from utils.main_menu_buttons import main_menu, button_names, old_button_names
+from config import bot, authorized_ids, user_data, process_in_progress
+from database import DatabaseConnection, update_authorized_users
+from handlers.authorization import authorized_only
+from integrations.google_api_functions import read_credentials_from_sheet
 
 
 @bot.message_handler(commands=['start', 'menu', 'help'])

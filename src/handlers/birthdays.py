@@ -2,10 +2,10 @@ import datetime
 
 from telebot import types
 
-from src.config import bot
-from src.database import DatabaseConnection
-from src.handlers.authorization import authorized_only
-from src.handlers.main_menu import send_birthdays
+from config import bot
+from database import DatabaseConnection
+from handlers.authorization import authorized_only
+from handlers.main_menu import send_birthdays
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('birthdays_'))

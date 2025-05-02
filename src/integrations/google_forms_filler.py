@@ -10,9 +10,9 @@ import os
 
 from telebot import types
 
-from src.config import bot, user_data, process_in_progress
-from src.database import DatabaseConnection
-from src.utils.messages import delete_messages
+from config import bot, user_data, process_in_progress
+from database import DatabaseConnection
+from utils.messages import delete_messages
 
 
 class FormFiller:
