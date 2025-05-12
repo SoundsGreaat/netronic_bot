@@ -4,8 +4,8 @@ from collections import defaultdict
 from openai import OpenAI
 from telebot import TeleBot
 
-FONT_ARIAL = '../assets/fonts/ARIAL.TTF'
-FONT_ARIAL_BOLD = '../assets/fonts/ARIALBD.TTF'
+FONT_EVOLVENTA = '../assets/fonts/Evolventa-Regular.ttf'
+FONT_EVOLVENTA_BOLD = '../assets/fonts/Evolventa-Regular.ttf'
 COMMENDATION_TEMPLATE = '../assets/images/commendation_template.png'
 
 SESSION_ENCRYPTED_PATH = '../sessions/userbot_session_encrypted'

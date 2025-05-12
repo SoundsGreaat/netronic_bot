@@ -1,10 +1,13 @@
 from time import sleep
 
+from telebot import types
+from telebot.types import InlineKeyboardMarkup
 from utils.main_menu_buttons import main_menu, button_names, old_button_names
 from config import bot, authorized_ids, user_data, process_in_progress
 from database import DatabaseConnection, update_authorized_users
 from handlers.authorization import authorized_only
-from integrations.google_api_functions import read_credentials_from_sheet
+from integrations.google_api_functions import read_credentials_from_sheet, update_commendations_mod_in_sheet, \
+    approve_and_parse_to_database
 
 
 @bot.message_handler(commands=['start', 'menu', 'help'])
@@ -12,10 +15,10 @@ from integrations.google_api_functions import read_credentials_from_sheet
 def send_main_menu(message):
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('''
-        SELECT name, CASE WHEN admins.employee_id IS NOT NULL THEN TRUE ELSE FALSE END
-        FROM employees 
-        LEFT JOIN admins ON employees.id = admins.employee_id 
-        WHERE telegram_user_id = %s
+                       SELECT name, CASE WHEN admins.employee_id IS NOT NULL THEN TRUE ELSE FALSE END
+                       FROM employees
+                                LEFT JOIN admins ON employees.id = admins.employee_id
+                       WHERE telegram_user_id = %s
                        ''', (message.chat.id,))
         employee_name, is_admin = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
@@ -114,3 +117,35 @@ def old_button_handler(message):
     bot.send_message(message.chat.id, 'Ця кнопка була видалена або замінена.'
                                       '\nБудь ласка, скористайтесь меню нижче.',
                      reply_markup=main_menu)
+
+
+@bot.message_handler(commands=['approve_commendations'])
+@authorized_only(user_type='moderators')
+def approve_commendations_handler(message):
+    markup = InlineKeyboardMarkup()
+    confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити', callback_data='confirmmod_approve')
+    cancel_btn = types.InlineKeyboardButton(text='❌ Відмінити', callback_data='cancelmod_approve')
+    markup.add(confirm_btn, cancel_btn)
+    bot.send_message(
+        message.chat.id,
+        'Ви впевнені, що хочете підтвердити відправку подяк?'
+        '\nВсі затверджені подяки будуть надіслані в базу даних.'
+        '\nВсі незатверджені подяки будуть безповоротно видалені.',
+        reply_markup=markup
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'confirmmod_approve')
+@authorized_only(user_type='moderators')
+def confirm_approve_commendations_handler(call):
+    sheet_id = '15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I'
+    approve_and_parse_to_database(sheet_id, 'COMMENDATIONS TO BE MODERATED',
+                                  DatabaseConnection)
+    bot.edit_message_text('✔️ Подяки успішно підтверджені та надіслані в базу даних.',
+                          call.message.chat.id, call.message.message_id)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'cancelmod_approve')
+@authorized_only(user_type='moderators')
+def cancel_approve_commendations_handler(call):
+    bot.edit_message_text('❌ Підтвердження подяк скасовано.', call.message.chat.id, call.message.message_id)

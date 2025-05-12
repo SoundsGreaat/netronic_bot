@@ -105,6 +105,108 @@ def update_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection
     print(f'Data updated in sheet {sheet_name}')
 
 
+def update_commendations_mod_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
+    creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
+    creds = Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    service = build('sheets', 'v4', credentials=creds)
+
+    sheet = service.spreadsheets()
+    range_name = f'{sheet_name}!A:G'
+    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+    values = result.get('values', [])
+
+    headers = values[0] if values else []
+
+    sheet.values().clear(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        body={}
+    ).execute()
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute(
+            'SELECT comm.id, e_from.name, e_to.name, comm.commendation_text, value.name, comm.commendation_date '
+            'FROM commendations_mod comm '
+            'JOIN employees e_from ON comm.employee_from_id = e_from.id '
+            'JOIN employees e_to ON comm.employee_to_id = e_to.id '
+            'LEFT JOIN commendation_values value ON comm.value_id = value.id '
+            'ORDER BY comm.id'
+        )
+        commendations_info = cursor.fetchall()
+
+    processed_info = [
+        [cell.strftime('%Y-%m-%d') if isinstance(cell, date) else (cell if cell is not None else ' ') for cell in row] + [False]
+        for row in commendations_info
+    ]
+
+    body = {
+        'values': [headers] + processed_info if headers else processed_info
+    }
+    sheet.values().update(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        valueInputOption='RAW',
+        body=body
+    ).execute()
+
+    print(f'Data updated in sheet {sheet_name}')
+
+
+def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection):
+    creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
+    creds = Credentials.from_service_account_info(
+        creds_info,
+        scopes=['https://www.googleapis.com/auth/spreadsheets']
+    )
+    service = build('sheets', 'v4', credentials=creds)
+
+    sheet = service.spreadsheets()
+    range_name = f'{sheet_name}!A:G'
+    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+    values = result.get('values', [])
+
+    if not values:
+        return False
+
+    commendation_info = values[1:]
+    ids_to_approve = [row[0] for row in commendation_info if row[-1].upper() == 'TRUE']
+
+    if not ids_to_approve:
+        return False
+
+    placeholders = ','.join(['%s'] * len(ids_to_approve))
+    select_query = f'''
+        SELECT commendation_text, commendation_date, employee_to_id, employee_from_id, position, value_id
+        FROM commendations_mod
+        WHERE id IN ({placeholders})
+    '''
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute(select_query, ids_to_approve)
+        commendations_info = cursor.fetchall()
+
+        if not commendations_info:
+            return False
+
+        insert_query = '''
+                       INSERT INTO commendations
+                       (commendation_text, commendation_date, employee_to_id, employee_from_id, position, value_id)
+                       VALUES (%s, %s, %s, %s, %s, %s) \
+                       '''
+
+        cursor.executemany(insert_query, commendations_info)
+        cursor.execute('TRUNCATE TABLE commendations_mod')
+        conn.commit()
+
+    sheet.values().clear(
+        spreadsheetId=spreadsheet_id,
+        range=f'{sheet_name}!A2:G',
+        body={}
+    ).execute()
+
+    return True
+
+
 def read_credentials_from_sheet(spreadsheet_id, sheet_name, telegram_username):
     creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
     creds = Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])

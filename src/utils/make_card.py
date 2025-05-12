@@ -1,11 +1,11 @@
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
 
-from config import COMMENDATION_TEMPLATE, FONT_ARIAL, FONT_ARIAL_BOLD
+from config import COMMENDATION_TEMPLATE, FONT_EVOLVENTA, FONT_EVOLVENTA_BOLD
 
 
 def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=False):
-    font_path = FONT_ARIAL_BOLD if bold else FONT_ARIAL
+    font_path = FONT_EVOLVENTA_BOLD if bold else FONT_EVOLVENTA
     font = ImageFont.truetype(font_path, font_size)
 
     def split_text(text, font, max_width):
