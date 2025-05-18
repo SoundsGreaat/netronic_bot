@@ -130,7 +130,8 @@ def show_commendation(call):
     commendation_id = int(call.data.split('_')[1])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
-            'SELECT e_to.name, commendations.position, commendation_text, commendation_date, e_from.name, values.name '
+            'SELECT e_to.name, commendations.position, commendation_text, commendation_date, e_from.name, values.name, '
+            'e_from.position '
             'FROM commendations '
             'JOIN employees e_to ON employee_to_id = e_to.id '
             'JOIN employees e_from ON employee_from_id = e_from.id '
@@ -138,10 +139,11 @@ def show_commendation(call):
             'WHERE commendations.id = %s', (commendation_id,)
         )
         employee_name, employee_position, commendation_text, commendation_date, employee_from_name, \
-            value_name = cursor.fetchone()
+            value_name, employee_from_position = cursor.fetchone()
 
     formatted_date = commendation_date.strftime('%d.%m.%Y')
-    image = make_card(employee_name, employee_position, commendation_text)
+    image = make_card(employee_name, employee_position, commendation_text, value_name, employee_from_name,
+                      employee_from_position)
     message_text = (f'👨‍💻 <b>{employee_name}</b> | {formatted_date}\n\nВід <b>{employee_from_name}</b>'
                     f'\nЦінність: <b>{value_name if value_name else "Не вказано"}</b>'
                     f'\n\n{commendation_text}')
@@ -291,9 +293,24 @@ def send_thanks_name_mod(message, position_changed=False):
         data_filled = True
 
     if data_filled or position_changed:
-        image = make_card(make_card_data[message.chat.id]['employee_name'],
-                          make_card_data[message.chat.id]['employee_position'],
-                          make_card_data[message.chat.id]['thanks_text'])
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT name, position FROM employees WHERE telegram_user_id = %s',
+                           (message.chat.id,))
+            employee_from_name, employee_from_position = cursor.fetchone()
+
+            cursor.execute('SELECT name FROM commendation_values WHERE id = %s',
+                           (make_card_data[message.chat.id]['value'],))
+            value_name = cursor.fetchone()[0]
+
+        image = make_card(
+            make_card_data[message.chat.id]['employee_name'],
+            make_card_data[message.chat.id]['employee_position'],
+            make_card_data[message.chat.id]['thanks_text'],
+            value_name,
+            employee_from_name,
+            employee_from_position
+        )
+
         make_card_data[message.chat.id]['image'] = image
 
         markup = types.InlineKeyboardMarkup(row_width=2)
@@ -479,10 +496,24 @@ def send_thanks_name(message, position_changed=False):
         data_filled = True
 
     if data_filled or position_changed:
-        image = make_card(make_card_data[message.chat.id]['employee_name'],
-                          make_card_data[message.chat.id]['employee_position'],
-                          make_card_data[message.chat.id]['thanks_text'])
-        make_card_data[message.chat.id]['image'] = image
+        if data_filled or position_changed:
+            with DatabaseConnection() as (conn, cursor):
+                cursor.execute('SELECT name, position FROM employees WHERE telegram_user_id = %s',
+                               (message.chat.id,))
+                employee_from_name, employee_from_position = cursor.fetchone()
+
+                cursor.execute('SELECT name FROM commendation_values WHERE id = %s',
+                               (make_card_data[message.chat.id]['value'],))
+                value_name = cursor.fetchone()[0]
+
+            image = make_card(
+                make_card_data[message.chat.id]['employee_name'],
+                make_card_data[message.chat.id]['employee_position'],
+                make_card_data[message.chat.id]['thanks_text'],
+                value_name,
+                employee_from_name,
+                employee_from_position
+            )
 
         markup = types.InlineKeyboardMarkup(row_width=2)
         confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити', callback_data='confirm_send_thanks')

@@ -5,8 +5,9 @@ from openai import OpenAI
 from telebot import TeleBot
 
 FONT_EVOLVENTA = '../assets/fonts/Evolventa-Regular.ttf'
-FONT_EVOLVENTA_BOLD = '../assets/fonts/Evolventa-Regular.ttf'
-COMMENDATION_TEMPLATE = '../assets/images/commendation_template.png'
+FONT_EVOLVENTA_BOLD = '../assets/fonts/Evolventa-Bold.ttf'
+FONT_PACIFICO = '../assets/fonts/Pacifico-Regular.ttf'
+COMMENDATION_TEMPLATE = '../assets/images/commendation_template_new_empty.png'
 
 SESSION_ENCRYPTED_PATH = '../sessions/userbot_session_encrypted'
 SESSION_DECRYPTED_PATH = '../sessions/userbot_session.session'
