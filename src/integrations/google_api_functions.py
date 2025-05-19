@@ -16,18 +16,13 @@ def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
     result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
     values = result.get('values', [])
 
-    if values:
-        headers = values[0]
+    headers = values[0] if values else []
 
-        body = {
-            'values': [[] for _ in range(len(values) - 1)]
-        }
-        sheet.values().update(
-            spreadsheetId=spreadsheet_id,
-            range=f'{sheet_name}!A2:I',
-            valueInputOption='RAW',
-            body=body
-        ).execute()
+    sheet.values().clear(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        body={}
+    ).execute()
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
