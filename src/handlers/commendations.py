@@ -9,7 +9,7 @@ from database import DatabaseConnection, find_contact_by_name
 from handlers import authorized_only
 from integrations.google_api_functions import update_commendations_in_sheet, update_commendations_mod_in_sheet
 from integrations.telethon_functions import send_photo
-from utils.make_card import make_card
+from utils.make_card import make_card, make_card_old
 from utils.main_menu_buttons import button_names
 
 
@@ -142,8 +142,13 @@ def show_commendation(call):
             value_name, employee_from_position = cursor.fetchone()
 
     formatted_date = commendation_date.strftime('%d.%m.%Y')
-    image = make_card(employee_name, employee_position, commendation_text, value_name, employee_from_name,
-                      employee_from_position)
+
+    # TODO change template
+    # image = make_card(employee_name, employee_position, commendation_text, value_name, employee_from_name,
+    #                   employee_from_position)
+
+    image = make_card_old(employee_name, employee_position, commendation_text)
+
     message_text = (f'👨‍💻 <b>{employee_name}</b> | {formatted_date}\n\nВід <b>{employee_from_name}</b>'
                     f'\nЦінність: <b>{value_name if value_name else "Не вказано"}</b>'
                     f'\n\n{commendation_text}')
@@ -456,9 +461,15 @@ def proceed_send_thanks(call):
         value_name = value[1]
         btn = types.InlineKeyboardButton(text=f'{value_name}', callback_data=f'value_{value_id}')
         markup.add(btn)
+    # TODO change template
+    # sent_message = bot.edit_message_text(
+    #     f'Виберіть цінність, якій відповідає подяка:',
+    #     call.message.chat.id, call.message.message_id, parse_mode='HTML', reply_markup=markup)
+    # make_card_data[call.message.chat.id]['sent_message'] = sent_message
+
     sent_message = bot.edit_message_text(
-        f'Виберіть цінність, якій відповідає подяка:',
-        call.message.chat.id, call.message.message_id, parse_mode='HTML', reply_markup=markup)
+        f'📝 Введіть ім\'я для співробітника <b>{employee_name}</b> у давальному відмінку:',
+        call.message.chat.id, call.message.message_id, parse_mode='HTML')
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
 
@@ -502,18 +513,20 @@ def send_thanks_name(message, position_changed=False):
                                (message.chat.id,))
                 employee_from_name, employee_from_position = cursor.fetchone()
 
-                cursor.execute('SELECT name FROM commendation_values WHERE id = %s',
-                               (make_card_data[message.chat.id]['value'],))
-                value_name = cursor.fetchone()[0]
+                # cursor.execute('SELECT name FROM commendation_values WHERE id = %s',
+                #                (make_card_data[message.chat.id]['value'],))
+                # value_name = cursor.fetchone()[0]
 
-            image = make_card(
-                make_card_data[message.chat.id]['employee_name'],
-                make_card_data[message.chat.id]['employee_position'],
-                make_card_data[message.chat.id]['thanks_text'],
-                value_name,
-                employee_from_name,
-                employee_from_position
-            )
+        image = make_card_old(
+            make_card_data[message.chat.id]['employee_name'],
+            make_card_data[message.chat.id]['employee_position'],
+            make_card_data[message.chat.id]['thanks_text'],
+            # TODO change template
+            # value_name,
+            # employee_from_name,
+            # employee_from_position
+        )
+        make_card_data[message.chat.id]['image'] = image
 
         markup = types.InlineKeyboardMarkup(row_width=2)
         confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити', callback_data='confirm_send_thanks')
@@ -536,19 +549,28 @@ def confirm_send_thanks(call):
     employee_id = make_card_data[call.message.chat.id]['employee_id']
     commendation_text = make_card_data[call.message.chat.id]['thanks_text']
     employee_position = make_card_data[call.message.chat.id]['employee_position']
-    value_id = make_card_data[call.message.chat.id]['value']
+    # value_id = make_card_data[call.message.chat.id]['value']
     commendation_date = datetime.datetime.now().date()
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (call.message.chat.id,))
         sender_id = cursor.fetchone()[0]
+        # TODO change template
+        # cursor.execute(
+        #     'INSERT INTO commendations ('
+        #     'employee_to_id, employee_from_id, commendation_text, commendation_date, position, '
+        #     'value_id) '
+        #     'VALUES (%s, %s, %s, %s, %s, %s)',
+        #     (employee_id, sender_id, commendation_text, commendation_date, employee_position, value_id)
+        # )
+
         cursor.execute(
             'INSERT INTO commendations ('
-            'employee_to_id, employee_from_id, commendation_text, commendation_date, position, '
-            'value_id) '
-            'VALUES (%s, %s, %s, %s, %s, %s)',
-            (employee_id, sender_id, commendation_text, commendation_date, employee_position, value_id)
+            'employee_to_id, employee_from_id, commendation_text, commendation_date, position) '
+            'VALUES (%s, %s, %s, %s, %s)',
+            (employee_id, sender_id, commendation_text, commendation_date, employee_position)
         )
+
         conn.commit()
 
     update_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I',
