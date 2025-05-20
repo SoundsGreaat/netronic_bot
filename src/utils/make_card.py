@@ -67,11 +67,14 @@ def make_card(name, position, thank_you_text, value_text=None, from_name=None, f
 
     return image
 
+
 def draw_text_old(draw, text, font_size, center_position, color=(0, 0, 0), bold=False):
     font_path = FONT_ARIAL_BOLD if bold else FONT_ARIAL
     font = ImageFont.truetype(font_path, font_size)
 
     def split_text(text, font, max_width):
+        if not text:
+            return []
         words = text.split()
         lines = []
         current_line = words[0]
@@ -111,22 +114,26 @@ def make_card_old(name, position, thank_you_text):
     image_path = COMMENDATION_TEMPLATE_OLD
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
-    draw_text(draw, 'ПОДЯКА', 68, (585, 115), (106, 157, 246), True)
-    draw_text(draw, position, 16, (585, 200))
-    draw_text(draw, name, 36, (585, 240), (57, 120, 213), True)
-    draw_text(draw, thank_you_text, 19, (585, 300))
-    draw_text(draw, f'{datetime.now().strftime("%d.%m.%Y")}', 14, (857, 402))
+    draw_text_old(draw, 'ПОДЯКА', 68, (585, 115), (106, 157, 246), True)
+    draw_text_old(draw, position, 16, (585, 200))
+    draw_text_old(draw, name, 36, (585, 240), (57, 120, 213), True)
+    draw_text_old(draw, thank_you_text, 19, (585, 300))
+    draw_text_old(draw, f'{datetime.now().strftime("%d.%m.%Y")}', 14, (857, 402))
 
     return image
 
 
 if __name__ == '__main__':
-    make_card_old('Прізвище Ім\'я', 'Тестова посада',
-              'Текст подяки').show()
+    make_card_old(
+        'Прізвище Ім\'я',
+        'ПОСАДА',
+        'Текст подяки Текст подяки Текст подяки Текст подяки Текст подяки'
+    ).show()
 
-
-
-if __name__ == '__main__':
-    make_card('Прізвище Ім\'я', 'ПОСАДА',
-              'За підвищення кваліфікації', '🎯Відповідальність і проактивність',
-              'Від Прізвище Ім\'я', 'Від ПОСАДА').show()
+    make_card(
+        'Прізвище Ім\'я',
+        'ПОСАДА',
+        'Текст подяки Текст подяки Текст подяки Текст подяки Текст подяки',
+        '🎯Відповідальність і проактивність',
+        'Від Прізвище Ім\'я', 'Від ПОСАДА'
+    ).show()
