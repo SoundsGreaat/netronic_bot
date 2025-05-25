@@ -1,6 +1,6 @@
 # Netronic Bot / Telegram Bot
 
-[![Static Badge](https://img.shields.io/badge/MIT-Lisence?style=for-the-badge&logo=github&label=License&color=yellow)](https://github.com/SoundsGreaat/netronic_bot?tab=MIT-1-ov-file)
+[![Static Badge](https://img.shields.io/badge/MIT-Lisence?style=for-the-badge&logo=github&label=Lisense&color=yellow)](https://github.com/SoundsGreaat/netronic_bot?tab=MIT-1-ov-file)
 
 ## Description
 The project aims to simplify the process of obtaining employee contacts. Users can quickly find the necessary information using a bot in the messenger, which allows them to effectively organize communication in the organization. It is possible to ask AI for help and get answers to work-related questions.
