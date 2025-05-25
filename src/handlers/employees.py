@@ -272,51 +272,53 @@ def send_profile(call, call_data=None):
                                      intermediate_departments.name,
                                      emp.email,
                                      emp.date_of_birth
-                            FROM employees as emp
-                            JOIN sub_departments ON emp.sub_department_id = sub_departments.id
-                            JOIN departments ON sub_departments.department_id = departments.id
-                            LEFT JOIN intermediate_departments ON 
-                                                    sub_departments.intermediate_department_id = intermediate_departments.id
-                            WHERE emp.id = %s
-                    ''', (employee_id,))
+                              FROM employees as emp
+                                       JOIN sub_departments ON emp.sub_department_id = sub_departments.id
+                                       JOIN departments ON sub_departments.department_id = departments.id
+                                       LEFT JOIN intermediate_departments ON
+                                  sub_departments.intermediate_department_id = intermediate_departments.id
+                              WHERE emp.id = %s
+                           ''', (employee_id,))
             employee_info = cursor.fetchone()
 
     else:
         with DatabaseConnection() as (conn, cursor):
             cursor.execute('''
-                SELECT emp.name,
-                       CASE 
-                           WHEN ad.sub_department_id IS NOT NULL THEN d2.name
-                           ELSE d1.name
-                       END AS department,
-                       
-                       CASE 
-                           WHEN ad.sub_department_id IS NOT NULL THEN sd2.name
-                           ELSE sd1.name
-                       END AS sub_department,
-                       
-                       CASE 
-                           WHEN ad.sub_department_id IS NOT NULL THEN ad.position
-                           ELSE emp.position
-                       END AS position,
-                       
-                       emp.phone,
-                       emp.telegram_username,
-                       intermediate_departments.name,
-                       emp.email,
-                       emp.date_of_birth
-                FROM employees AS emp
-                LEFT JOIN sub_departments AS sd1 ON emp.sub_department_id = sd1.id
-                LEFT JOIN departments AS d1 ON sd1.department_id = d1.id
-        
-                LEFT JOIN additional_sub_departments AS ad ON emp.id = ad.employee_id
-                LEFT JOIN sub_departments AS sd2 ON ad.sub_department_id = sd2.id
-                LEFT JOIN departments AS d2 ON sd2.department_id = d2.id
-        
-                LEFT JOIN intermediate_departments ON sd1.intermediate_department_id = intermediate_departments.id
-        
-                WHERE emp.id = %s AND (emp.sub_department_id = %s OR ad.sub_department_id = %s)
-            ''', (employee_id, sub_department_id, sub_department_id))
+                           SELECT emp.name,
+                                  CASE
+                                      WHEN ad.sub_department_id IS NOT NULL THEN d2.name
+                                      ELSE d1.name
+                                      END AS department,
+
+                                  CASE
+                                      WHEN ad.sub_department_id IS NOT NULL THEN sd2.name
+                                      ELSE sd1.name
+                                      END AS sub_department,
+
+                                  CASE
+                                      WHEN ad.sub_department_id IS NOT NULL THEN ad.position
+                                      ELSE emp.position
+                                      END AS position,
+
+                                  emp.phone,
+                                  emp.telegram_username,
+                                  intermediate_departments.name,
+                                  emp.email,
+                                  emp.date_of_birth
+                           FROM employees AS emp
+                                    LEFT JOIN sub_departments AS sd1 ON emp.sub_department_id = sd1.id
+                                    LEFT JOIN departments AS d1 ON sd1.department_id = d1.id
+
+                                    LEFT JOIN additional_sub_departments AS ad ON emp.id = ad.employee_id
+                                    LEFT JOIN sub_departments AS sd2 ON ad.sub_department_id = sd2.id
+                                    LEFT JOIN departments AS d2 ON sd2.department_id = d2.id
+
+                                    LEFT JOIN intermediate_departments
+                                              ON sd1.intermediate_department_id = intermediate_departments.id
+
+                           WHERE emp.id = %s
+                             AND (emp.sub_department_id = %s OR ad.sub_department_id = %s)
+                           ''', (employee_id, sub_department_id, sub_department_id))
             employee_info = cursor.fetchone()
 
     employee_name = employee_info[0]
@@ -375,6 +377,7 @@ def edit_employee(call):
         edit_username_btn_callback = f'e_uname_s_{search_query}_{employee_id}'
         edit_email_btn_callback = f'e_email_s_{search_query}_{employee_id}'
         edit_date_of_birth_btn_callback = f'e_dob_s_{search_query}_{employee_id}'
+        edit_department_btn_callback = f'e_depart_s_{search_query}_{employee_id}'
         edit_sub_department_btn_callback = f'e_subdep_s_{search_query}_{employee_id}'
         show_keywords_btn_callback = f'show_keywords_s_{search_query}_{employee_id}'
         delete_btn_callback = f'delete_s_{search_query}_{employee_id}'
@@ -394,6 +397,8 @@ def edit_employee(call):
                                    f'{sub_department_id}_{employee_id}')
         edit_date_of_birth_btn_callback = (f'e_dob_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                            f'{sub_department_id}_{employee_id}')
+        edit_department_btn_callback = (f'e_depart_{additional_instance}_{department_id}_'
+                                        f'{intermediate_department_id}_{sub_department_id}_{employee_id}')
         edit_sub_department_btn_callback = (
             f'e_subdep_{additional_instance}_{department_id}_{intermediate_department_id}_'
             f'{sub_department_id}_{employee_id}')
@@ -419,6 +424,8 @@ def edit_employee(call):
     edit_email_btn = types.InlineKeyboardButton(text='📧 Змінити email', callback_data=edit_email_btn_callback)
     edit_date_of_birth_btn = types.InlineKeyboardButton(text='🎂 Змінити дату народження',
                                                         callback_data=edit_date_of_birth_btn_callback)
+    edit_department_btn = types.InlineKeyboardButton(text='🏢 Змінити департамент',
+                                                     callback_data=edit_department_btn_callback)
     edit_sub_department_btn = types.InlineKeyboardButton(text='🗄️ Змінити відділ',
                                                          callback_data=edit_sub_department_btn_callback)
     manage_additional_departments_btn = types.InlineKeyboardButton(text='🗄️ Керування додатковими відділами',
@@ -431,8 +438,11 @@ def edit_employee(call):
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
 
     markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn, show_keywords_btn,
-               edit_email_btn, edit_date_of_birth_btn, edit_sub_department_btn, manage_additional_departments_btn)
+    markup.add(
+        edit_name_btn, edit_phone_btn, edit_position_btn, edit_username_btn, show_keywords_btn,
+        edit_email_btn, edit_date_of_birth_btn, edit_department_btn, edit_sub_department_btn,
+        manage_additional_departments_btn
+    )
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT telegram_user_id FROM employees WHERE id = %s', (employee_id,))
         employee_telegram_id = cursor.fetchone()[0]
@@ -690,6 +700,9 @@ def proceed_edit_employee(call):
         delete_date_of_birth_btn = types.InlineKeyboardButton(text='🗑️ Видалити дату народження',
                                                               callback_data=f'del_dob_{employee_id}')
         additional_button = delete_date_of_birth_btn
+    elif call.data.startswith('e_depart'):
+        edit_employee_data[call.from_user.id]['column'] = ('department_id', employee_id)
+        message_text = f'🏢 Введіть приблизну назву департаменту для контакту <b>{employee_name}</b>:'
     elif call.data.startswith('e_subdep'):
         edit_employee_data[call.from_user.id]['column'] = ('sub_department_id', employee_id)
         message_text = f'🗄️ Введіть приблизну назву відділу для контакту <b>{employee_name}</b>:'
@@ -738,6 +751,26 @@ def edit_employee_data_ans(message):
     elif column == 'position':
         result_message_text = f'✅ Посаду контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
         log_text = f'Employee {employee_id} position changed to {new_value} by {message.from_user.username}.'
+
+    elif column == 'department_id':
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT id, name FROM departments')
+            departments = cursor.fetchall()
+            original_departments = [(department[0], department[1].strip()) for department in departments]
+            departments = [(id, name.lower()) for id, name in original_departments]
+        query = new_value.lower()
+        best_match = process.extractOne(query, [name for id, name in departments])
+        original_best_match = next((id, name) for id, name in original_departments if name.lower() == best_match[0])
+        new_value = original_best_match[0]
+        department_name = original_best_match[1]
+        with DatabaseConnection() as (conn, cursor):
+            cursor.execute('SELECT id FROM sub_departments WHERE department_id = %s LIMIT 1', (new_value,))
+            sub_department = cursor.fetchone()
+        new_value = sub_department[0]
+        column = 'sub_department_id'
+        result_message_text = (f'✅ Департамент контакту <b>{employee_name}</b> змінено на <b>{department_name}</b>.'
+                               f'\nСхожість: {best_match[1]:.1f}%')
+        log_text = f'Employee {employee_id} department_id changed to {new_value} by {message.from_user.username}.'
 
     elif column == 'sub_department_id':
         with DatabaseConnection() as (conn, cursor):
