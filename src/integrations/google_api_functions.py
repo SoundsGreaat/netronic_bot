@@ -125,6 +125,7 @@ def update_commendations_mod_in_sheet(spreadsheet_id, sheet_name, DatabaseConnec
             'JOIN employees e_from ON comm.employee_from_id = e_from.id '
             'JOIN employees e_to ON comm.employee_to_id = e_to.id '
             'LEFT JOIN commendation_values value ON comm.value_id = value.id '
+            'WHERE deleted = FALSE '
             'ORDER BY comm.id'
         )
         commendations_info = cursor.fetchall()
@@ -173,7 +174,7 @@ def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection
     select_query = f'''
         SELECT commendation_text, commendation_date, employee_to_id, employee_from_id, position, value_id
         FROM commendations_mod
-        WHERE id IN ({placeholders})
+        WHERE id IN ({placeholders}) AND deleted = FALSE
     '''
 
     with DatabaseConnection() as (conn, cursor):
@@ -190,7 +191,7 @@ def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection
                        '''
 
         cursor.executemany(insert_query, commendations_info)
-        cursor.execute('TRUNCATE TABLE commendations_mod')
+        cursor.execute('UPDATE commendations_mod SET deleted = TRUE')
         conn.commit()
 
     sheet.values().clear(
