@@ -59,7 +59,7 @@ assets/:                   Fonts and image templates for commendation cards
 sessions/:                 Encrypted and decrypted session files
 ```
 
-## How To Use It
+## Getting Started
 1. **Clone the repository**: `git clone https://github.com/SoundsGreaat/netronic_bot.git`
 2. **Install the required packages**: `pip install -r requirements.txt`
 3. **Generate secret keys**: Create a `.env` file in the root of the project and fill it with the following data:
