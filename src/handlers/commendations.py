@@ -272,7 +272,7 @@ def select_value(call):
     employee_name_basic = make_card_data[call.message.chat.id]['employee_name_basic']
 
     sent_message = bot.edit_message_text(
-        f'📝 Введіть ім\'я для співробітника <b>{employee_name_basic}</b> у давальному відмінку:',
+        '📝 Введіть текст подяки:',
         call.message.chat.id, call.message.message_id, parse_mode='HTML')
 
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
@@ -284,13 +284,7 @@ def select_value(call):
 def send_thanks_name_mod(message, position_changed=False):
     data_filled = False
 
-    if not make_card_data[message.chat.id].get('employee_name'):
-        make_card_data[message.chat.id]['employee_name'] = message.text
-        sent_message = make_card_data[message.chat.id]['sent_message']
-        bot.delete_message(message.chat.id, message.message_id)
-        bot.edit_message_text('📝 Введіть текст подяки:', message.chat.id, sent_message.message_id)
-
-    elif not make_card_data[message.chat.id].get('thanks_text'):
+    if not make_card_data[message.chat.id].get('thanks_text'):
         make_card_data[message.chat.id]['thanks_text'] = message.text
         sent_message = make_card_data[message.chat.id]['sent_message']
         bot.delete_message(message.chat.id, message.message_id)
@@ -308,7 +302,7 @@ def send_thanks_name_mod(message, position_changed=False):
             value_name = cursor.fetchone()[0]
 
         image = make_card(
-            make_card_data[message.chat.id]['employee_name'],
+            make_card_data[message.chat.id]['employee_name_basic'],
             make_card_data[message.chat.id]['employee_position'],
             make_card_data[message.chat.id]['thanks_text'],
             value_name,
@@ -468,7 +462,7 @@ def proceed_send_thanks(call):
     # make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
     sent_message = bot.edit_message_text(
-        f'📝 Введіть ім\'я для співробітника <b>{employee_name}</b> у давальному відмінку:',
+        '📝 Введіть текст подяки:',
         call.message.chat.id, call.message.message_id, parse_mode='HTML')
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
@@ -481,7 +475,7 @@ def select_value(call):
     employee_name_basic = make_card_data[call.message.chat.id]['employee_name_basic']
 
     sent_message = bot.edit_message_text(
-        f'📝 Введіть ім\'я для співробітника <b>{employee_name_basic}</b> у давальному відмінку:',
+        '📝 Введіть текст подяки:',
         call.message.chat.id, call.message.message_id, parse_mode='HTML')
 
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
@@ -493,13 +487,7 @@ def select_value(call):
 def send_thanks_name(message, position_changed=False):
     data_filled = False
 
-    if not make_card_data[message.chat.id].get('employee_name'):
-        make_card_data[message.chat.id]['employee_name'] = message.text
-        sent_message = make_card_data[message.chat.id]['sent_message']
-        bot.delete_message(message.chat.id, message.message_id)
-        bot.edit_message_text('📝 Введіть текст подяки:', message.chat.id, sent_message.message_id)
-
-    elif not make_card_data[message.chat.id].get('thanks_text'):
+    if not make_card_data[message.chat.id].get('thanks_text'):
         make_card_data[message.chat.id]['thanks_text'] = message.text
         sent_message = make_card_data[message.chat.id]['sent_message']
         bot.delete_message(message.chat.id, message.message_id)
@@ -518,7 +506,7 @@ def send_thanks_name(message, position_changed=False):
                 # value_name = cursor.fetchone()[0]
 
         image = make_card_old(
-            make_card_data[message.chat.id]['employee_name'],
+            make_card_data[message.chat.id]['employee_name_basic'],
             make_card_data[message.chat.id]['employee_position'],
             make_card_data[message.chat.id]['thanks_text'],
             # TODO change template
