@@ -131,7 +131,8 @@ def update_commendations_mod_in_sheet(spreadsheet_id, sheet_name, DatabaseConnec
         commendations_info = cursor.fetchall()
 
     processed_info = [
-        [cell.strftime('%Y-%m-%d') if isinstance(cell, date) else (cell if cell is not None else ' ') for cell in row] + [False]
+        [cell.strftime('%Y-%m-%d') if isinstance(cell, date) else (cell if cell is not None else ' ') for cell in
+         row] + [False]
         for row in commendations_info
     ]
 
@@ -200,7 +201,7 @@ def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection
         body={}
     ).execute()
 
-    return True
+    return ids_to_approve
 
 
 def read_credentials_from_sheet(spreadsheet_id, sheet_name, telegram_username):

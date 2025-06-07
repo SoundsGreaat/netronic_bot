@@ -1,13 +1,16 @@
+import asyncio
 from time import sleep
 
-from telebot import types
+from telebot import types, apihelper
 from telebot.types import InlineKeyboardMarkup
 from utils.main_menu_buttons import main_menu, button_names, old_button_names
+from utils.make_card import make_card
 from config import bot, authorized_ids, user_data, process_in_progress
 from database import DatabaseConnection, update_authorized_users
 from handlers.authorization import authorized_only
 from integrations.google_api_functions import read_credentials_from_sheet, update_commendations_mod_in_sheet, \
     approve_and_parse_to_database
+from integrations.telethon_functions import send_photo
 
 
 @bot.message_handler(commands=['start', 'menu', 'help'])
@@ -139,10 +142,48 @@ def approve_commendations_handler(message):
 @authorized_only(user_type='moderators')
 def confirm_approve_commendations_handler(call):
     sheet_id = '15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I'
-    approve_and_parse_to_database(sheet_id, 'COMMENDATIONS TO BE MODERATED',
-                                  DatabaseConnection)
-    bot.edit_message_text('✔️ Подяки успішно підтверджені та надіслані в базу даних.',
-                          call.message.chat.id, call.message.message_id)
+    commendation_ids = approve_and_parse_to_database(sheet_id, 'COMMENDATIONS TO BE MODERATED',
+                                                     DatabaseConnection)
+
+    if not commendation_ids:
+        bot.edit_message_text('❌ Немає подяк для підтвердження.', call.message.chat.id, call.message.message_id)
+        return
+
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+
+    with DatabaseConnection() as (conn, cursor):
+        for id in commendation_ids:
+            cursor.execute('''
+                           SELECT to_emp.name,
+                                  to_emp.position,
+                                  commendation_text,
+                                  values.name,
+                                  from_emp.name,
+                                  from_emp.position,
+                                  to_emp.telegram_user_id
+                           FROM commendations_mod
+                                    JOIN employees to_emp ON commendations_mod.employee_to_id = to_emp.id
+                                    JOIN employees from_emp ON commendations_mod.employee_from_id = from_emp.id
+                                    JOIN commendation_values values ON commendations_mod.value_id = values.id
+                           WHERE commendations_mod.id = %s
+                           ''', (id,))
+            card_data = cursor.fetchone()
+            image = make_card(
+                card_data[0], card_data[1], card_data[2], card_data[3], card_data[4], card_data[5]
+            )
+            recipient_id = card_data[6]
+
+            try:
+                bot.send_photo(recipient_id, image, caption='📩 Вам було надіслано подяку.')
+            except apihelper.ApiTelegramException as e:
+                if e.error_code == 400 and "chat not found" in e.description:
+                    bot.send_message(call.message.chat.id, '🚫 Користувача не знайдено. Надсилаю подяку як юзербот.')
+                    print('Sending image to user failed. Chat not found. Trying to send image as user.')
+                    asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.'))
+
+            bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
+
+    bot.send_message(call.message.chat.id, '✔️ Подяки успішно підтверджені та надіслані в базу даних.')
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancelmod_approve')
