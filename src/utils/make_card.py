@@ -110,11 +110,11 @@ def draw_text_old(draw, text, font_size, center_position, color=(0, 0, 0), bold=
         y_offset += text_bbox[3]
 
 
-def make_card_old(name, position, thank_you_text):
+def make_card_old(name, position, thank_you_text, header_text='ПОДЯКА'):
     image_path = COMMENDATION_TEMPLATE_OLD
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
-    draw_text_old(draw, 'ПОДЯКА', 68, (585, 115), (106, 157, 246), True)
+    draw_text_old(draw, header_text, 68, (585, 115), (106, 157, 246), True)
     draw_text_old(draw, position, 16, (585, 200))
     draw_text_old(draw, name, 36, (585, 240), (57, 120, 213), True)
     draw_text_old(draw, thank_you_text, 19, (585, 300))

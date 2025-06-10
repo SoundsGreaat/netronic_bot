@@ -3,7 +3,7 @@ from time import sleep
 
 from telebot import types, apihelper
 from telebot.types import InlineKeyboardMarkup
-from utils.main_menu_buttons import main_menu, button_names, old_button_names
+from utils.main_menu_buttons import main_menu, admin_menu, button_names, old_button_names
 from utils.make_card import make_card
 from config import bot, authorized_ids, user_data, process_in_progress
 from database import DatabaseConnection, update_authorized_users
@@ -26,13 +26,13 @@ def send_main_menu(message):
         employee_name, is_admin = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
-
+    menu = admin_menu if is_admin else main_menu
     with open('../assets/images/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
                                f'<b>Netronic</b>.'
                                f'\nЩо тебе цікавить?',
-                       reply_markup=main_menu, parse_mode='HTML')
+                       reply_markup=menu, parse_mode='HTML')
 
     if message.chat.id in authorized_ids['admins']:
         bot.send_message(message.chat.id, '🔐 Ви авторизовані як адміністратор.'

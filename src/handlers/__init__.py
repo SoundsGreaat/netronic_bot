@@ -29,3 +29,5 @@ from .commendations import show_thanks, show_my_thanks, show_thanks_period, show
     confirm_send_thanks, com_change_position, com_change_position_ans, cancel_send_thanks, hide_message
 
 from .ai import ai_question, proceed_ai_question, cancel_ai_question
+
+from . import awards

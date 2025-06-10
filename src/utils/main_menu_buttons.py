@@ -1,3 +1,4 @@
+import copy
 from telebot import types
 
 
@@ -17,9 +18,14 @@ def create_main_menu():
     markup.row(make_card_button, birthday_button)
     markup.row(support_button)
 
-    return markup
+    admin_markup = copy.deepcopy(markup)
+
+    awards_button = types.KeyboardButton('🏆 Нагороди')
+    admin_markup.row(awards_button)
+
+    return markup, admin_markup
 
 
-main_menu = create_main_menu()
-button_names = [btn['text'] for row in main_menu.keyboard for btn in row]
+main_menu, admin_menu = create_main_menu()
+button_names = [btn['text'] for row in admin_menu.keyboard for btn in row]
 old_button_names = ['🎓 База знань', '🎅 Таємний Санта']
