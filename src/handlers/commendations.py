@@ -144,10 +144,11 @@ def show_commendation(call):
     formatted_date = commendation_date.strftime('%d.%m.%Y')
 
     # TODO change template
-    # image = make_card(employee_name, employee_position, commendation_text, value_name, employee_from_name,
-    #                   employee_from_position)
-
-    image = make_card_old(employee_name, employee_position, commendation_text)
+    if not value_name:
+        image = make_card_old(employee_name, employee_position, commendation_text)
+    else:
+        image = make_card(employee_name, employee_position, commendation_text, value_name, employee_from_name,
+                          employee_from_position)
 
     message_text = (f'👨‍💻 <b>{employee_name}</b> | {formatted_date}\n\nВід <b>{employee_from_name}</b>'
                     f'\nЦінність: <b>{value_name if value_name else "Не вказано"}</b>'

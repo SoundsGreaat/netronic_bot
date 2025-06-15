@@ -42,7 +42,7 @@ def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=Fals
     y_offset = center_position[1] - text_height // 2
 
     if len(lines) == 2:
-        y_offset -= 10
+        y_offset += 5
 
     for line in lines:
         text_bbox = draw.textbbox((0, 0), line, font=font)
