@@ -82,13 +82,13 @@ def back_to_send_contacts_menu(call):
 def thanks_menu(message):
     markup = types.InlineKeyboardMarkup()
     show_my_thanks_button = types.InlineKeyboardButton(text='🔍 Мої подяки', callback_data='show_my_thanks')
-    send_commendation_mod = types.InlineKeyboardButton(text='📜 Надіслати подяку на модерацію',
+    send_commendation_mod = types.InlineKeyboardButton(text='📜 Надіслати подяку',
                                                        callback_data='send_commendation_mod')
     markup.add(show_my_thanks_button)
 
     if message.chat.id in authorized_ids['moderators'] or message.chat.id in authorized_ids['admins']:
         show_thanks_button = types.InlineKeyboardButton(text='🔍 Передивитись подяки', callback_data='show_thanks')
-        send_thanks_button = types.InlineKeyboardButton(text='📜 Надіслати подяку', callback_data='send_thanks')
+        send_thanks_button = types.InlineKeyboardButton(text='📜 Розсилка старих подяк', callback_data='send_thanks')
         markup.add(show_thanks_button, send_thanks_button, row_width=1)
 
     markup.add(send_commendation_mod)
