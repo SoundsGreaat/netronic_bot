@@ -9,7 +9,7 @@ from config import bot, authorized_ids, user_data, process_in_progress
 from database import DatabaseConnection, update_authorized_users
 from handlers.authorization import authorized_only
 from integrations.google_api_functions import read_credentials_from_sheet, update_commendations_mod_in_sheet, \
-    approve_and_parse_to_database, update_commendations_in_sheet
+    approve_and_parse_to_database, update_commendations_in_sheet, update_all_commendations_in_sheet
 from integrations.telethon_functions import send_photo
 
 
@@ -182,7 +182,7 @@ def confirm_approve_commendations_handler(call):
                     asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.'))
 
             bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
-
+    update_all_commendations_in_sheet(sheet_id, 'APPROVED AND DECLINED', DatabaseConnection)
     update_commendations_in_sheet(sheet_id, 'BOT AUTOFILL COMMENDATIONS', DatabaseConnection)
     bot.send_message(call.message.chat.id, '✔️ Подяки успішно підтверджені та надіслані в базу даних.')
 
