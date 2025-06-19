@@ -100,23 +100,17 @@ def update_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection
     print(f'Data updated in sheet {sheet_name}')
 
 
-def update_commendations_mod_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
+def update_commendations_mod_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection, remove_all=False):
     creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
     creds = Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])
     service = build('sheets', 'v4', credentials=creds)
 
     sheet = service.spreadsheets()
-    range_name = f'{sheet_name}!A:G'
+    range_name = f'{sheet_name}!A:F' if not remove_all else f'{sheet_name}!A:G'
     result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
     values = result.get('values', [])
 
     headers = values[0] if values else []
-
-    sheet.values().clear(
-        spreadsheetId=spreadsheet_id,
-        range=range_name,
-        body={}
-    ).execute()
 
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
@@ -132,13 +126,20 @@ def update_commendations_mod_in_sheet(spreadsheet_id, sheet_name, DatabaseConnec
 
     processed_info = [
         [cell.strftime('%Y-%m-%d') if isinstance(cell, date) else (cell if cell is not None else ' ') for cell in
-         row] + [False]
+         row]
         for row in commendations_info
     ]
 
     body = {
         'values': [headers] + processed_info if headers else processed_info
     }
+
+    sheet.values().clear(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        body={}
+    ).execute()
+
     sheet.values().update(
         spreadsheetId=spreadsheet_id,
         range=range_name,
