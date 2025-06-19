@@ -7,8 +7,7 @@ from telebot import types, apihelper
 from config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data
 from database import DatabaseConnection, find_contact_by_name
 from handlers import authorized_only
-from integrations.google_api_functions import update_commendations_in_sheet, update_commendations_mod_in_sheet, \
-    update_all_commendations_in_sheet
+from integrations.google_api_functions import update_commendations_in_sheet, update_all_commendations_in_sheet
 from integrations.telethon_functions import send_photo
 from utils.make_card import make_card, make_card_old
 from utils.main_menu_buttons import button_names
@@ -353,7 +352,6 @@ def confirm_send_thanks(call):
 
     sheet_id = '15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I'
     update_all_commendations_in_sheet(sheet_id, 'APPROVED AND DECLINED', DatabaseConnection)
-    update_commendations_mod_in_sheet(sheet_id, 'COMMENDATIONS TO BE MODERATED', DatabaseConnection)
 
     bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано на модерацію.'
                                                         '\nДякуємо за вашу залученість!')

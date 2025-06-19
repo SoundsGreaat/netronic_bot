@@ -8,8 +8,8 @@ from utils.make_card import make_card
 from config import bot, authorized_ids, user_data, process_in_progress
 from database import DatabaseConnection, update_authorized_users
 from handlers.authorization import authorized_only
-from integrations.google_api_functions import read_credentials_from_sheet, update_commendations_mod_in_sheet, \
-    approve_and_parse_to_database, update_commendations_in_sheet, update_all_commendations_in_sheet
+from integrations.google_api_functions import read_credentials_from_sheet, approve_and_parse_to_database, \
+    update_commendations_in_sheet, update_all_commendations_in_sheet
 from integrations.telethon_functions import send_photo
 
 
