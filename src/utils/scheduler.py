@@ -37,6 +37,6 @@ def send_birthday_notification():
 
 
 def start_scheduler():
-    scheduler.add_job(send_birthday_notification, 'cron', day=25, hour=17, minute=0, id='monthly_job',
-                      replace_existing=True)
+    scheduler.add_job(send_birthday_notification, 'cron', day=25, hour=17, minute=0,
+                      id='birthday_notification_job', replace_existing=True)
     scheduler.start()
