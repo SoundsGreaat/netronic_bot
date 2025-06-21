@@ -42,6 +42,13 @@ class DatabaseListener:
         if self.conn is not None:
             self.conn.close()
 
+    def ping(self):
+        try:
+            self.cursor.execute("SELECT 1;")
+        except Exception as e:
+            print(f"Database ping failed: {e}")
+            raise
+
     def wait_for_notification(self, timeout=None):
         if select.select([self.conn], [], [], timeout) == ([], [], []):
             return None
