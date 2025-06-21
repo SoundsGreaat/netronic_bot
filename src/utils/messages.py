@@ -31,7 +31,9 @@ def send_links(message, link_type, edit_message=False, show_back_btn=False):
         link_type_id = cursor.fetchone()[0]
     markup = types.InlineKeyboardMarkup()
     for link_id, link_name, link in links:
-        if link.startswith('https://docs.google.com/forms') or user_data['edit_link_mode'].get(message.chat.id):
+        if link_name == '📋 Каса взаємодопомоги':
+            btn = types.InlineKeyboardButton(text=link_name, callback_data='mutual_assistance')
+        elif link.startswith('https://docs.google.com/forms') or user_data['edit_link_mode'].get(message.chat.id):
             btn = types.InlineKeyboardButton(text=link_name, callback_data=f'open_link_{link_id}_{int(show_back_btn)}')
         elif link == 'https://help.netronic.team/':
             btn = types.InlineKeyboardButton(text=link_name, callback_data='helpdesk_it')

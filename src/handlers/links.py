@@ -199,6 +199,21 @@ def proceed_edit_link_data(message):
     del edit_link_data['saved_message'][message.chat.id]
 
 
+@bot.callback_query_handler(func=lambda call: call.data == 'mutual_assistance')
+@authorized_only(user_type='users')
+def send_mutual_assistance(call):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(
+        text='🔗 Заявка на участь у проекті',
+        url='https://docs.google.com/forms/d/e/1FAIpQLSfJFLxp4aS_UuFJaCPC2RdblebsycWVl_Ct_jOwyVve0z0tcw/viewform')
+    )
+    markup.add(types.InlineKeyboardButton(
+        text='🔗 Заявка на отримання грошової допомоги',
+        url='https://docs.google.com/forms/d/e/1FAIpQLScVT_Iu-capY2scefXSJsnMSCwh-TRkaPfkzIxkv3yfUWl2ww/viewform')
+    )
+    bot.send_message(call.message.chat.id, '📋 Оберіть посилання нижче:', reply_markup=markup, parse_mode='HTML')
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_link_'))
 @authorized_only(user_type='admins')
 def delete_link_confirmation(call):
