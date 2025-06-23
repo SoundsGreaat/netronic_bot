@@ -23,9 +23,13 @@ def send_business_processes(message, edit_message=False):
     office_equipment_btn = types.InlineKeyboardButton(text='💻 Забезпечення офісу',
                                                       callback_data='b_process_office_equipment')
     hr_btn = types.InlineKeyboardButton(text='👨‍💼 HR', callback_data='b_process_hr')
+    business_initiative_btn = types.InlineKeyboardButton(
+        text='💡 Бізнес-ініціатива',
+        url='https://docs.google.com/forms/d/e/1FAIpQLScJlOaWdUt4wdQZVlUa2PB1c7PXEDdPShJ2bpWhrTmVRqnWQw/viewform'
+    )
 
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(personnel_management_btn, recruitment_btn, office_equipment_btn, hr_btn)
+    markup.add(personnel_management_btn, recruitment_btn, office_equipment_btn, hr_btn, business_initiative_btn)
     if edit_message:
         bot.edit_message_text('🔍 Оберіть бізнес-процес для перегляду:', message.chat.id, message.message_id,
                               reply_markup=markup)
@@ -110,6 +114,7 @@ def thanks_menu(message):
     sent_message = bot.send_message(message.chat.id, '🔽 Оберіть дію:',
                                     reply_markup=markup)
     make_card_data[message.chat.id]['sent_message'] = sent_message
+
 
 @bot.message_handler(func=lambda message: message.text == '🔗 Стрічка новин')
 @authorized_only(user_type='users')
