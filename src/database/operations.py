@@ -33,8 +33,6 @@ def update_authorized_users(authorized_ids: dict):
         ''')
         cursor_result = cursor.fetchall()
 
-        update_employees_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I', 'BOT AUTOFILL', DatabaseConnection)
-
         authorized_ids['moderators'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
 
         print(f'List of authorized users updated.'
