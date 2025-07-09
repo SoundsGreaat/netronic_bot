@@ -6,7 +6,7 @@ from telebot import types, apihelper
 
 from config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data
 from database import DatabaseConnection, find_contact_by_name
-from handlers import authorized_only
+from handlers import authorized_only, thanks_menu
 from integrations.google_api_functions import update_commendations_in_sheet, update_all_commendations_in_sheet
 from integrations.telethon_functions import send_photo
 from utils.make_card import make_card, make_card_old
@@ -41,7 +41,7 @@ def show_my_thanks(call):
         bot.edit_message_text('🔍 У вас немає подяк.', call.message.chat.id, call.message.message_id)
         return
 
-    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='thanks_menu')
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data='comm_menu')
     markup = types.InlineKeyboardMarkup()
     for commendation_id, commendation_text, commendation_date in commendations:
         formatted_date = commendation_date.strftime('%d.%m.%Y')
@@ -50,6 +50,12 @@ def show_my_thanks(call):
 
     markup.add(back_btn)
     bot.edit_message_text(f'📜 Ваші подяки:', call.message.chat.id, call.message.message_id, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'comm_menu')
+@authorized_only(user_type='users')
+def comm_menu(call):
+    thanks_menu(call.message, edit_message=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('time_thanks_'))

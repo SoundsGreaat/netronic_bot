@@ -88,7 +88,7 @@ def back_to_send_contacts_menu(call):
 
 @bot.message_handler(func=lambda message: message.text == '📜 Меню подяк')
 @authorized_only(user_type='users')
-def thanks_menu(message):
+def thanks_menu(message, edit_message=False):
     markup = types.InlineKeyboardMarkup()
     show_my_thanks_button = types.InlineKeyboardButton(text='🔍 Мої подяки', callback_data='show_my_thanks')
     send_commendation_mod = types.InlineKeyboardButton(text='📜 Надіслати подяку',
@@ -102,14 +102,20 @@ def thanks_menu(message):
 
     markup.add(send_commendation_mod)
 
-    sent_message = bot.send_message(message.chat.id, '🔽 Оберіть дію:',
-                                    reply_markup=markup)
-    make_card_data[message.chat.id]['sent_message'] = sent_message
+    if not edit_message:
+        sent_message = bot.send_message(message.chat.id, '🔽 Оберіть дію:',
+                                        reply_markup=markup)
+        make_card_data[message.chat.id]['sent_message'] = sent_message
+
+    else:
+        sent_message = bot.edit_message_text('🔽 Оберіть дію:', message.chat.id, message.message_id,
+                                             reply_markup=markup)
+        make_card_data[message.chat.id]['sent_message'] = sent_message
 
 
 @bot.message_handler(func=lambda message: message.text == '🏆 Нагороди')
 @authorized_only(user_type='moderators')
-def thanks_menu(message):
+def awards_menu(message):
     markup = types.InlineKeyboardMarkup()
 
     show_awards_button = types.InlineKeyboardButton(text='🔍 Передивитись нагороди', callback_data='show_awards')
