@@ -271,9 +271,7 @@ def proceed_contact_search(message, edit_message=False):
             employee_name = employee_info[1]
             employee_position = employee_info[2]
 
-            formatted_name = employee_name.split()
-            formatted_name = f'{formatted_name[0]} {formatted_name[1]}'
-            btn = types.InlineKeyboardButton(text=f'👨‍💻 {formatted_name} - {employee_position}',
+            btn = types.InlineKeyboardButton(text=f'👨‍💻 {employee_name} - {employee_position}',
                                              callback_data=f'profile_s_{message.text}_{employee_id}')
             markup.add(btn)
 
