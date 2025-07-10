@@ -610,7 +610,7 @@ def com_change_position_ans(message):
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel_send_thanks')
-@authorized_only(user_type='moderators')
+@authorized_only(user_type='users')
 def cancel_send_thanks(call):
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(call.message.chat.id, '🚪 Створення подяки скасовано.')
