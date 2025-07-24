@@ -7,6 +7,7 @@ from telebot import TeleBot
 FONT_EVOLVENTA = '../assets/fonts/Evolventa-Regular.ttf'
 FONT_EVOLVENTA_BOLD = '../assets/fonts/Evolventa-Bold.ttf'
 FONT_PACIFICO = '../assets/fonts/Pacifico-Regular.ttf'
+FONT_NOTO = '../assets/fonts/NotoEmoji-VariableFont_wght.ttf'
 FONT_ARIAL = '../assets/fonts/ARIAL.TTF'
 FONT_ARIAL_BOLD = '../assets/fonts/ARIALBD.TTF'
 

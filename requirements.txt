@@ -13,3 +13,5 @@ google==3.0.0
 rapidfuzz==3.11.0
 APScheduler==3.11.0
 SQLAlchemy==2.0.36
+emoji~=2.14.1
+protobuf~=6.31.1
