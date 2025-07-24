@@ -8,7 +8,7 @@ from config import COMMENDATION_TEMPLATE, FONT_EVOLVENTA, FONT_EVOLVENTA_BOLD, F
     FONT_ARIAL_BOLD, COMMENDATION_TEMPLATE_OLD
 
 
-def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=False, font='primary'):
+def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=False, font='primary', max_width=1200):
     from config import FONT_NOTO
 
     if font == 'primary':
@@ -56,7 +56,6 @@ def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=Fals
         lines.append(current_line)
         return lines
 
-    max_width = 1200
     lines = split_text_lines(clean_text, main_font, max_width)
     while len(lines) > 2:
         font_size -= 1
@@ -72,7 +71,8 @@ def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=Fals
     for line in lines:
         chunks = split_text_with_emojis(line)
         x = center_position[0]
-        total_line_width = sum(draw.textbbox((0, 0), chunk, font=emoji_font if is_emoji else main_font)[2] for chunk, is_emoji in chunks)
+        total_line_width = sum(
+            draw.textbbox((0, 0), chunk, font=emoji_font if is_emoji else main_font)[2] for chunk, is_emoji in chunks)
         x -= total_line_width // 2
 
         for chunk, is_emoji in chunks:
@@ -94,7 +94,7 @@ def make_card(name, position, thank_you_text, value_text=None, from_name=None, f
     draw_text(draw, thank_you_text, 45, (1000, 830))
     draw_text(draw, f'{datetime.now().strftime("%d.%m.%Y")}', 30, (495, 1120))
     draw_text(draw, from_name, 30, (1496, 1070))
-    draw_text(draw, from_position, 30, (1496, 1170))
+    draw_text(draw, from_position, 30, (1496, 1170), max_width=400)
 
     return image
 
