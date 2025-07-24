@@ -279,7 +279,7 @@ def select_value(call):
     employee_name_basic = make_card_data[call.message.chat.id]['employee_name_basic']
 
     sent_message = bot.edit_message_text(
-        '📝 Введіть текст подяки (не більше 120 символів):',
+        '📝 Введіть текст подяки (не більше 150 символів):',
         call.message.chat.id, call.message.message_id, parse_mode='HTML')
 
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
@@ -289,8 +289,8 @@ def select_value(call):
     message.chat.id) == 'send_thanks_mod')
 @authorized_only(user_type='users')
 def send_thanks_name_mod(message, position_changed=False):
-    if len(message.text) >= 120:
-        bot.reply_to(message, '❗️ Текст подяки не може перевищувати 120 символів.')
+    if len(message.text) >= 150:
+        bot.reply_to(message, '❗️ Текст подяки не може перевищувати 150 символів.')
         return
 
     data_filled = False
@@ -472,7 +472,7 @@ def proceed_send_thanks(call):
     # make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
     sent_message = bot.edit_message_text(
-        '📝 Введіть текст подяки (не більше 120 символів):',
+        '📝 Введіть текст подяки (не більше 150 символів):',
         call.message.chat.id, call.message.message_id, parse_mode='HTML')
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
@@ -495,8 +495,8 @@ def select_value(call):
     message.chat.id) == 'send_thanks')
 @authorized_only(user_type='moderators')
 def send_thanks_name(message, position_changed=False):
-    if len(message.text) >= 120:
-        bot.reply_to(message, '❗️ Текст подяки не може перевищувати 120 символів.')
+    if len(message.text) >= 150:
+        bot.reply_to(message, '❗️ Текст подяки не може перевищувати 150 символів.')
         return
 
     data_filled = False
