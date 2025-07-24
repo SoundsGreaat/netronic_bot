@@ -19,6 +19,8 @@ def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=Fals
     main_font = ImageFont.truetype(font_path, font_size)
     emoji_font = ImageFont.truetype(FONT_NOTO, font_size)
 
+    clean_text = text.replace('\ufe0f', '')
+
     def split_text_with_emojis(s):
         result = []
         buffer = ''
@@ -55,12 +57,12 @@ def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=Fals
         return lines
 
     max_width = 1200
-    lines = split_text_lines(text, main_font, max_width)
+    lines = split_text_lines(clean_text, main_font, max_width)
     while len(lines) > 2:
         font_size -= 1
         main_font = ImageFont.truetype(font_path, font_size)
         emoji_font = ImageFont.truetype(FONT_NOTO, font_size)
-        lines = split_text_lines(text, main_font, max_width)
+        lines = split_text_lines(clean_text, main_font, max_width)
 
     total_height = sum(draw.textbbox((0, 0), line, font=main_font)[3] for line in lines)
     y = center_position[1] - total_height // 2
