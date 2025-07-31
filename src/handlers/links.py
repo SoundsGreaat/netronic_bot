@@ -95,7 +95,7 @@ def send_form(call):
         edit_link_url_btn = types.InlineKeyboardButton(text='🔗 Редагувати посилання',
                                                        callback_data=f'edit_link_url_{link_id}_{show_back_btn}')
         delete_link_btn = types.InlineKeyboardButton(text='🗑️ Видалити посилання',
-                                                     callback_data=f'delete_link_{link_id}_{show_back_btn}')
+                                                     callback_data=f'delete-link_{link_id}_{show_back_btn}')
         back_btn = types.InlineKeyboardButton(text='🔙 Назад',
                                               callback_data=f'back_to_send_links_{link_type_id}_{show_back_btn}')
 
@@ -214,10 +214,10 @@ def send_mutual_assistance(call):
     bot.send_message(call.message.chat.id, '📋 Оберіть посилання нижче:', reply_markup=markup, parse_mode='HTML')
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('delete_link_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('delete-link_'))
 @authorized_only(user_type='admins')
 def delete_link_confirmation(call):
-    link_id, show_back_btn = map(int, call.data.split('_')[2:])
+    link_id, show_back_btn = map(int, call.data.split('_')[1:])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT name FROM links WHERE id = %s', (link_id,))
         link_info = cursor.fetchone()
@@ -225,17 +225,17 @@ def delete_link_confirmation(call):
     back_btn = types.InlineKeyboardButton(text='❌ Скасувати видалення',
                                           callback_data=f'open_link_{link_id}_{show_back_btn}')
     confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити видалення',
-                                             callback_data=f'confirm_delete_link_{link_id}')
+                                             callback_data=f'confirm-delete-link_{link_id}')
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(confirm_btn, back_btn)
     bot.edit_message_text(f'Ви впевнені, що хочете видалити посилання <b>{link_name}</b>?', call.message.chat.id,
                           call.message.message_id, reply_markup=markup, parse_mode='HTML')
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('confirm_delete_link_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('confirm-delete-link_'))
 @authorized_only(user_type='admins')
 def delete_link(call):
-    link_id = int(call.data.split('_')[3])
+    link_id = int(call.data.split('_')[1])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT name FROM links WHERE id = %s', (link_id,))
         link_info = cursor.fetchone()
