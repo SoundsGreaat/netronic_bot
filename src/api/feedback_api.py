@@ -4,6 +4,7 @@ import os
 from telebot import types
 
 from config import bot
+from database import DatabaseConnection
 
 app = FastAPI()
 
@@ -40,9 +41,16 @@ async def send_feedback(
 
     markup.add(*buttons)
 
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT telegram_user_id FROM employees WHERE crm_id = %s', (payload.user_id,))
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found in the database")
+        telegram_user_id = result[0]
+
     try:
         bot.send_message(
-            chat_id=payload.user_id,
+            chat_id=telegram_user_id,
             text=message,
             reply_markup=markup,
             parse_mode="Markdown"
