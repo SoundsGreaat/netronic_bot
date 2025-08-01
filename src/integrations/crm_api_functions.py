@@ -24,7 +24,8 @@ def get_employee_pass_from_crm(crm_user_id):
             return employee_crm_id
         except AttributeError:
             print(f'Error {response.status_code}: {response.text}')
-            return
+            return None
+    return None
 
 
 def add_employee_to_crm(name, phone, position, telegram_user_id, telegram_username, email):
@@ -95,10 +96,10 @@ def update_employee_in_crm(crm_user_id, name, phone, position, telegram_user_id,
         try:
             response_message = data.get('data')
             print(response_message)
-            return
+            return None
         except AttributeError:
             print(f'Error {response.status_code}: {response.text}')
-            return
+            return None
     else:
         print(f'Error {response.status_code}: {response.text}')
         return None
