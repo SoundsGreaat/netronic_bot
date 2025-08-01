@@ -113,16 +113,8 @@ def send_rating_to_crm(ticket_id, rating):
     }
 
     response = requests.post(crm_feedback_url, json=payload)
+    print(response.text)
 
-    if response.status_code == 200:
-        data = response.json()
-        try:
-            response_message = response.text
-            print(response_message)
-            return response_message
-        except AttributeError:
-            print(f'Error {response.status_code}: {response.text}')
-            return None
-    else:
-        print(f'Error {response.status_code}: {response.text}')
-        return None
+    data = response.json()
+    print(data.get('message', 'No message in response'))
+    return data
