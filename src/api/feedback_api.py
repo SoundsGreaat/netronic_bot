@@ -5,6 +5,8 @@ from telebot import types
 
 from config import bot
 from database import DatabaseConnection
+from handlers import authorized_only
+from integrations.crm_api_functions import send_rating_to_crm
 
 app = FastAPI()
 
@@ -59,3 +61,16 @@ async def send_feedback(
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
 
     return {"status": "ok"}
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('rate:'))
+@authorized_only(user_type='users')
+def handle_rating(call):
+    _, rating, task_id = call.data.split(':')
+    rating = int(rating)
+    task_id = int(task_id)
+    if send_rating_to_crm(task_id, rating):
+        bot.answer_callback_query(call.id, text="Дякуємо за вашу оцінку!", show_alert=True)
+    else:
+        bot.answer_callback_query(call.id, text="Помилка при відправці оцінки.", show_alert=True)
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)

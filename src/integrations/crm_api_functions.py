@@ -99,3 +99,27 @@ def update_employee_in_crm(crm_user_id, name, phone, position, telegram_user_id,
     else:
         print(f'Error {response.status_code}: {response.text}')
         return None
+
+
+def send_rating_to_crm(ticket_id, rating):
+    payload = {
+        'key': CRM_KEY,
+        'action': 'rate',
+        'idTicket': ticket_id,
+        'rating': rating
+    }
+
+    response = requests.post(CRM_URL, json=payload)
+
+    if response.status_code == 200:
+        data = response.json()
+        try:
+            response_message = data.get('data')
+            print(response_message)
+            return response_message
+        except AttributeError:
+            print(f'Error {response.status_code}: {response.text}')
+            return None
+    else:
+        print(f'Error {response.status_code}: {response.text}')
+        return None
