@@ -4,6 +4,9 @@ import os
 CRM_URL = os.getenv('CRM_URL')
 CRM_KEY = os.getenv('CRM_KEY')
 
+crm_employee_url = f'{CRM_URL}/employees'
+crm_feedback_url = f'{CRM_URL}/tickets'
+
 
 def get_employee_pass_from_crm(crm_user_id):
     payload = {
@@ -12,7 +15,7 @@ def get_employee_pass_from_crm(crm_user_id):
         'id': crm_user_id
     }
 
-    response = requests.post(CRM_URL, json=payload)
+    response = requests.post(crm_employee_url, json=payload)
 
     if response.status_code == 200:
         data = response.json()
@@ -36,7 +39,7 @@ def add_employee_to_crm(name, phone, position, telegram_user_id, telegram_userna
         'email': email
     }
 
-    response = requests.post(CRM_URL, json=payload)
+    response = requests.post(crm_employee_url, json=payload)
 
     if response.status_code == 200:
         data = response.json()
@@ -59,7 +62,7 @@ def delete_employee_from_crm(crm_user_id):
         'id': crm_user_id
     }
 
-    response = requests.post(CRM_URL, json=payload)
+    response = requests.post(crm_employee_url, json=payload)
 
     if response.status_code == 200:
         data = response.json()
@@ -85,7 +88,7 @@ def update_employee_in_crm(crm_user_id, name, phone, position, telegram_user_id,
         'email': email
     }
 
-    response = requests.post(CRM_URL, json=payload)
+    response = requests.post(crm_employee_url, json=payload)
 
     if response.status_code == 200:
         data = response.json()
@@ -109,12 +112,12 @@ def send_rating_to_crm(ticket_id, rating):
         'rating': rating
     }
 
-    response = requests.post(CRM_URL, json=payload)
+    response = requests.post(crm_feedback_url, json=payload)
 
     if response.status_code == 200:
         data = response.json()
         try:
-            response_message = data.get('data')
+            response_message = response.text
             print(response_message)
             return response_message
         except AttributeError:

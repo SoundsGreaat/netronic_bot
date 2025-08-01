@@ -69,8 +69,17 @@ def handle_rating(call):
     _, rating, task_id = call.data.split(':')
     rating = int(rating)
     task_id = int(task_id)
-    if send_rating_to_crm(task_id, rating):
-        bot.answer_callback_query(call.id, text="Дякуємо за вашу оцінку!", show_alert=True)
+    crm_response = send_rating_to_crm(task_id, rating)
+    if crm_response:
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"Дякуємо за вашу оцінку: ⭐️ {rating}!\n\n"
+                 f"Ваш відгук допоможе нам покращити якість обслуговування.",
+        )
     else:
-        bot.answer_callback_query(call.id, text="Помилка при відправці оцінки.", show_alert=True)
-    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text="Виникла помилка при надсиланні вашої оцінки.",
+        )
