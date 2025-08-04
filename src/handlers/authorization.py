@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from telebot import types, apihelper
 
 from database import DatabaseConnection
@@ -15,17 +17,19 @@ def authorized_only(user_type):
             if (chat_id in authorized_ids[user_type] or chat_id in authorized_ids['temp_users'] and user_type == 'users'
                     or chat_id in authorized_ids['admins']):
                 func(data, *args, **kwargs)
+                log_user_action(chat_id, func.__name__)
                 print(f'User @{data.from_user.username} accessed {func.__name__}')
             else:
                 with DatabaseConnection() as (conn, cursor):
                     cursor.execute('''SELECT employees.telegram_username
-                                FROM admins
-                                JOIN employees ON admins.employee_id = employees.id
-                            ''')
+                                      FROM admins
+                                               JOIN employees ON admins.employee_id = employees.id
+                                   ''')
                     admin_list = [username[0] for username in cursor.fetchall()]
                 markup = types.ReplyKeyboardRemove()
                 print(
-                    f'Unauthorized user @{data.from_user.username} (chat id: {data.chat.id}) tried to access {func.__name__}')
+                    f'Unauthorized user @{data.from_user.username} '
+                    f'(chat id: {data.chat.id}) tried to access {func.__name__}')
                 bot.send_message(chat_id, f'Ви не авторизовані для використання цієї функції.'
                                           f'\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.'
                                           f'\n\nСписок адміністраторів: {", ".join(admin_list)}',
@@ -64,3 +68,28 @@ def temp_authorize_user_by_contact(message):
                                           f'\nКористувач <b>{message.contact.first_name}</b> вже авторизований.',
                          parse_mode='HTML')
     del process_in_progress[message.chat.id]
+
+
+def log_user_action(chat_id, function_name):
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT id FROM employees WHERE telegram_user_id = %s', (chat_id,))
+        result = cursor.fetchone()
+        user_id = result[0]
+
+        cursor.execute(
+            'SELECT id FROM functions WHERE name = %s',
+            (function_name,)
+        )
+        result = cursor.fetchone()
+        if result:
+            function_id = result[0]
+        else:
+            cursor.execute('INSERT INTO functions (name) VALUES (%s) RETURNING id', (function_name,))
+            function_id = cursor.fetchone()[0]
+            conn.commit()
+
+        cursor.execute(
+            "INSERT INTO user_actions (user_id, function_id, action_timestamp) VALUES (%s, %s, %s)",
+            (user_id, function_id, datetime.now())
+        )
+        conn.commit()
