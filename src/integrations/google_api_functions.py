@@ -5,6 +5,8 @@ from datetime import date
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 
+from config import authorized_ids, bot
+
 
 def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
     creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
@@ -42,6 +44,53 @@ def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
 
     body = {
         'values': [headers] + processed_info
+    }
+    sheet.values().update(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        valueInputOption='RAW',
+        body=body
+    ).execute()
+
+    print(f'Data updated in sheet {sheet_name}')
+
+
+def update_bot_users_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
+    creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
+    creds = Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    service = build('sheets', 'v4', credentials=creds)
+
+    user_list = []
+
+    sheet = service.spreadsheets()
+    range_name = f'{sheet_name}!A:C'
+    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+    values = result.get('values', [])
+
+    headers = values[0] if values else []
+
+    sheet.values().clear(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        body={}
+    ).execute()
+
+    with DatabaseConnection() as (conn, cursor):
+        for id in authorized_ids['users']:
+            try:
+                bot.get_chat(id)
+            except Exception as e:
+                cursor.execute('SELECT name, telegram_username FROM employees WHERE telegram_user_id = %s', (id,))
+                user_info = cursor.fetchone()
+                if user_info:
+                    user_list.append(user_info + (id,))
+
+    processed_info = [
+        [cell if cell is not None else ' ' for cell in row] for row in user_list
+    ]
+
+    body = {
+        'values': [headers] + processed_info if headers else processed_info
     }
     sheet.values().update(
         spreadsheetId=spreadsheet_id,
