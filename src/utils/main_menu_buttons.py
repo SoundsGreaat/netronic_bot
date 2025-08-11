@@ -21,7 +21,8 @@ def create_main_menu():
     admin_markup = copy.deepcopy(markup)
 
     awards_button = types.KeyboardButton('🏆 Нагороди')
-    admin_markup.row(awards_button)
+    referral_button = types.KeyboardButton('🤝 Реферальна програма')
+    admin_markup.row(awards_button, referral_button)
 
     return markup, admin_markup
 

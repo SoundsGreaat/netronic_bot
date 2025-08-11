@@ -127,6 +127,22 @@ def awards_menu(message):
     make_card_data[message.chat.id]['sent_message'] = sent_message
 
 
+@bot.message_handler(func=lambda message: message.text == '🤝 Реферальна програма')
+@authorized_only(user_type='moderators')
+def awards_menu(message):
+    markup = types.InlineKeyboardMarkup()
+
+    show_awards_button = types.InlineKeyboardButton(text='🔍 Передивитись подяки (реферальна програма)',
+                                                    callback_data='show_refs')
+    send_award_button = types.InlineKeyboardButton(text='📜 Надіслати подяку (реферальна програма)',
+                                                   callback_data='send_ref')
+    markup.add(show_awards_button, send_award_button, row_width=1)
+
+    sent_message = bot.send_message(message.chat.id, '🔽 Оберіть дію:',
+                                    reply_markup=markup)
+    make_card_data[message.chat.id]['sent_message'] = sent_message
+
+
 @bot.message_handler(func=lambda message: message.text == '🔗 Стрічка новин')
 @authorized_only(user_type='users')
 def send_useful_links(message, edit_message=False):
