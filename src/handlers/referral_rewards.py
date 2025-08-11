@@ -44,7 +44,7 @@ def show_refs_period(call):
     with DatabaseConnection() as (conn, cursor):
         if start_date:
             cursor.execute(
-                'SELECT referrals.id, name, referrals.position, referral_date'
+                'SELECT referrals.id, name, referrals.position, referral_date '
                 'FROM referrals '
                 'JOIN employees ON employee_to_id = employees.id '
                 'WHERE referral_date >= %s '
