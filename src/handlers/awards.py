@@ -186,7 +186,7 @@ def proceed_award_search(message):
             formatted_name = employee_name.split()
             formatted_name = f'{formatted_name[0]} {formatted_name[1]}'
             btn = types.InlineKeyboardButton(text=f'👨‍💻 {formatted_name} - {employee_position}',
-                                             callback_data=f'giveaword_{employee_id}')
+                                             callback_data=f'giveaward_{employee_id}')
             markup.add(btn)
         cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_award')
         markup.add(cancel_btn)
@@ -195,7 +195,7 @@ def proceed_award_search(message):
                                              reply_markup=markup)
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('giveaword_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('giveaward_'))
 @authorized_only(user_type='moderators')
 def proceed_send_award(call):
     employee_id = int(call.data.split('_')[1])
@@ -212,7 +212,6 @@ def proceed_send_award(call):
     make_card_data[call.message.chat.id]['employee_name_basic'] = employee_name_basic
     make_card_data[call.message.chat.id]['employee_position'] = employee_position
     make_card_data[call.message.chat.id]['employee_telegram_id'] = employee_telegram_id
-    markup = types.InlineKeyboardMarkup(row_width=1)
 
     sent_message = bot.edit_message_text(
         '📝 Введіть текст нагороди:',
