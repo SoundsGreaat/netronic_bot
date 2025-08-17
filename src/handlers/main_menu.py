@@ -17,24 +17,45 @@ def send_knowledge_base(message, edit_message=False):
 @bot.message_handler(func=lambda message: message.text == '💼 Бізнес-процеси')
 @authorized_only(user_type='users')
 def send_business_processes(message, edit_message=False):
-    personnel_management_btn = types.InlineKeyboardButton(text='📁 Кадрове діловодство',
-                                                          callback_data='b_process_personnel_management')
-    recruitment_btn = types.InlineKeyboardButton(text='🕵️ Recruitment', callback_data='b_process_recruitment')
-    office_equipment_btn = types.InlineKeyboardButton(text='💻 Забезпечення офісу',
-                                                      callback_data='b_process_office_equipment')
-    hr_btn = types.InlineKeyboardButton(text='👨‍💼 HR', callback_data='b_process_hr')
+    personnel_management_btn = types.InlineKeyboardButton(
+        text='📁 Кадрове діловодство',
+        callback_data='b_process_personnel_management'
+    )
+
+    recruitment_btn = types.InlineKeyboardButton(
+        text='🕵️ Recruitment',
+        callback_data='b_process_recruitment'
+    )
+
+    office_equipment_btn = types.InlineKeyboardButton(
+        text='💻 Забезпечення офісу',
+        callback_data='b_process_office_equipment'
+    )
+
+    hr_btn = types.InlineKeyboardButton(
+        text='👨‍💼 HR',
+        callback_data='b_process_hr'
+    )
+
+    law_department_btn = types.InlineKeyboardButton(
+        text='⚖️ Заявка до юр. департаменту',
+        callback_data='b_process_law'
+    )
+
     business_initiative_btn = types.InlineKeyboardButton(
         text='💡 Бізнес-ініціатива',
         url='https://docs.google.com/forms/d/e/1FAIpQLScJlOaWdUt4wdQZVlUa2PB1c7PXEDdPShJ2bpWhrTmVRqnWQw/viewform'
     )
-    law_department_btn = types.InlineKeyboardButton(
-        text='⚖️ Заявка до юр. департаменту',
-        url='https://docs.google.com/forms/d/1qCFzCNBF3LsX4__-NfCWZsg4o_X2yJ8gkdVKBp1-_k0/edit'
-    )
 
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(personnel_management_btn, recruitment_btn, office_equipment_btn, hr_btn, business_initiative_btn,
-               law_department_btn)
+    markup.add(
+        personnel_management_btn,
+        recruitment_btn,
+        office_equipment_btn,
+        hr_btn,
+        law_department_btn,
+        business_initiative_btn
+    )
     if edit_message:
         bot.edit_message_text('🔍 Оберіть бізнес-процес для перегляду:', message.chat.id, message.message_id,
                               reply_markup=markup)
