@@ -293,7 +293,10 @@ def confirm_send_award(call):
         if e.error_code == 400 and "chat not found" in e.description:
             bot.send_message(call.message.chat.id, '🚫 Користувача не знайдено. Надсилаю нагороду як юзербот.')
             print('Sending image to user failed. Chat not found. Trying to send image as user.')
-            asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано нагороду.'))
+            try:
+                asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано нагороду.'))
+            except Exception as e:
+                print('Error sending photo via userbot:', e)
 
     bot.send_photo(call.message.chat.id, image, caption='✅ Нагороду надіслано.')
 

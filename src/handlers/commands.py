@@ -180,7 +180,10 @@ def confirm_approve_commendations_handler(call):
                     bot.send_message(call.message.chat.id, f'🚫 Користувача <b>{card_data[0]}</b> не знайдено. '
                                                            f'Надсилаю подяку як юзербот.',
                                      parse_mode='HTML')
-                    asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.'))
+                    try:
+                        asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.'))
+                    except Exception as e:
+                        print('Error sending photo via userbot:', e)
 
             bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
     update_all_commendations_in_sheet(sheet_id, 'APPROVED AND DECLINED', DatabaseConnection)
