@@ -7,6 +7,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from config import BIRTHDAY_NOTIFICATIONS_USER_IDS, MONTH_DICT, bot
 from database import DatabaseConnection
 from integrations.google_api_functions import update_employees_in_sheet, update_bot_users_in_sheet
+from integrations.log_exporter import update_google_stats
 
 db_url = os.getenv('SCHEDULE_DATABASE_URL')
 
@@ -46,6 +47,10 @@ def run_update_bot_users_in_sheet():
                               DatabaseConnection)
 
 
+def run_update_google_stats():
+    update_google_stats('1Z0hSaiuBJEE-nv0bIch95243BdE6tQwEodTWix5krto')
+
+
 def start_scheduler():
     scheduler.add_job(send_birthday_notification, 'cron', day=25, hour=17, minute=0,
                       id='birthday_notification_job', replace_existing=True)
@@ -53,4 +58,6 @@ def start_scheduler():
                       id='update_google_sheets_job', replace_existing=True)
     scheduler.add_job(run_update_bot_users_in_sheet, 'interval', days=7,
                       id='update_bot_users_in_sheet_job', replace_existing=True)
+    scheduler.add_job(run_update_google_stats, 'cron', hour=23, minute=0,
+                      id='update_google_stats_job', replace_existing=True)
     scheduler.start()
