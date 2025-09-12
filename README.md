@@ -78,6 +78,7 @@ sessions/:                 Encrypted and decrypted session files
    TELETHON_API_HASH_USERBOT: your_telethon_api_hash_userbot
    TELETHON_API_ID: your_telethon_api_id
    TELETHON_API_ID_USERBOT: your_telethon_api_id_userbot
+   BOT_API_KEY: your_fast_api_key
     ```
 4. **Run the bot**: `python src/main.py`
 
