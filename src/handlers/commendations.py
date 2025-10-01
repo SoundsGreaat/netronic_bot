@@ -4,7 +4,7 @@ import math
 
 from telebot import types, apihelper
 
-from config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data
+from config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data, authorized_ids
 from database import DatabaseConnection, find_contact_by_name
 from handlers import authorized_only, thanks_menu
 from integrations.google_api_functions import update_commendations_in_sheet, update_all_commendations_in_sheet
@@ -131,7 +131,7 @@ def show_thanks_period(call):
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('commendation_'))
-@authorized_only(user_type='moderators')
+@authorized_only(user_type='users')
 def show_commendation(call):
     commendation_id = int(call.data.split('_')[1])
     with DatabaseConnection() as (conn, cursor):
@@ -162,7 +162,11 @@ def show_commendation(call):
     delete_btn = types.InlineKeyboardButton(text='🗑️ Видалити', callback_data=f'delcommendation_{commendation_id}')
     hide_btn = types.InlineKeyboardButton(text='❌ Сховати', callback_data='hide_message')
     markup = types.InlineKeyboardMarkup()
-    markup.add(delete_btn, hide_btn)
+    markup.add(hide_btn)
+
+    if call.from_user.id in authorized_ids['admins']:
+        markup.add(delete_btn)
+
     bot.send_photo(call.message.chat.id, image, caption=message_text, reply_markup=markup, parse_mode='HTML')
 
 
