@@ -247,6 +247,65 @@ def update_all_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnec
     print(f'Data updated in sheet {sheet_name}')
 
 
+def create_commendation_statistics_sheet(spreadsheet_id, DatabaseConnection):
+    from datetime import datetime
+
+    creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
+    creds = Credentials.from_service_account_info(creds_info,
+                                                  scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    service = build('sheets', 'v4', credentials=creds)
+
+    now = datetime.now()
+    sheet_name = f"{now.strftime('%B')} {now.year}"
+
+    try:
+        sheet_body = {
+            'requests': [{
+                'addSheet': {
+                    'properties': {
+                        'title': sheet_name
+                    }
+                }
+            }]
+        }
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body=sheet_body
+        ).execute()
+    except Exception as e:
+        if "already exists" not in str(e):
+            raise e
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('''
+                       SELECT e.name,
+                              COUNT(CASE WHEN c.employee_from_id = e.id THEN 1 END) as sent_count,
+                              COUNT(CASE WHEN c.employee_to_id = e.id THEN 1 END)   as received_count
+                       FROM employees e
+                                INNER JOIN commendations c ON (c.employee_from_id = e.id OR c.employee_to_id = e.id)
+                           AND EXTRACT(MONTH FROM c.commendation_date) = %s
+                           AND EXTRACT(YEAR FROM c.commendation_date) = %s
+                       GROUP BY e.id, e.name
+                       ORDER BY sent_count DESC
+                       ''', (now.month, now.year))
+        statistics = cursor.fetchall()
+
+    headers = ['Employee Name', 'Sent Commendations', 'Received Commendations']
+    data = [headers] + [[row[0], row[1], row[2]] for row in statistics]
+
+    range_name = f'{sheet_name}!A:C'
+    body = {'values': data}
+
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        valueInputOption='RAW',
+        body=body
+    ).execute()
+
+    print(f'Commendation statistics for {sheet_name} created/updated.')
+
+
 def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection):
     creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
     creds = Credentials.from_service_account_info(
