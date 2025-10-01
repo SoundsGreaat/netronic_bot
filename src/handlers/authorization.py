@@ -27,9 +27,15 @@ def authorized_only(user_type):
                                    ''')
                     admin_list = [username[0] for username in cursor.fetchall()]
                 markup = types.ReplyKeyboardRemove()
+
+                try:
+                    chat_id = data.chat.id
+                except AttributeError:
+                    chat_id = data.message.chat.id
+
                 print(
                     f'Unauthorized user @{data.from_user.username} '
-                    f'(chat id: {data.chat.id}) tried to access {func.__name__}')
+                    f'(chat id: {chat_id}) tried to access {func.__name__}')
                 bot.send_message(chat_id, f'Ви не авторизовані для використання цієї функції.'
                                           f'\nЯкщо ви вважаєте, що це помилка, зверніться до адміністратора.'
                                           f'\n\nСписок адміністраторів: {", ".join(admin_list)}',
