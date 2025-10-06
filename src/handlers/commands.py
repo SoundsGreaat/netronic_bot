@@ -86,10 +86,10 @@ def remind_password(message):
 
     sent_message = bot.send_message(message.chat.id, '🔍 Пошук вашого пароля...')
 
-    user_data = read_credentials_from_sheet(spreadsheet_id, sheet_name, telegram_username)
-    if user_data:
+    credentials_data = read_credentials_from_sheet(spreadsheet_id, sheet_name, telegram_username)
+    if credentials_data:
         message_text = ''
-        for i, (key, value) in enumerate(user_data.items()):
+        for i, (key, value) in enumerate(credentials_data.items()):
             message_text += f'{key}: <code>{value}</code>\n'
             if i % 2 == 1:
                 message_text += '\n'
