@@ -4,16 +4,16 @@ from time import sleep
 
 from telebot import types, apihelper
 from telebot.types import InlineKeyboardMarkup
+
+from config import bot, authorized_ids, user_data, process_in_progress
+from database import DatabaseConnection, update_authorized_users
+from handlers.authorization import authorized_only
+from integrations.google_api_functions import read_credentials_from_sheet, approve_and_parse_to_database
+from integrations.telethon_functions import send_photo
 from utils.main_menu_buttons import main_menu, admin_menu, button_names, old_button_names
 from utils.make_card import make_card
 from utils.scheduler import scheduler, run_create_monthly_commendation_details_sheet, \
     run_update_all_commendations_in_sheet, run_update_commendations_in_sheet
-from config import bot, authorized_ids, user_data, process_in_progress
-from database import DatabaseConnection, update_authorized_users
-from handlers.authorization import authorized_only
-from integrations.google_api_functions import read_credentials_from_sheet, approve_and_parse_to_database, \
-    update_commendations_in_sheet, update_all_commendations_in_sheet
-from integrations.telethon_functions import send_photo
 
 
 @bot.message_handler(commands=['start', 'menu', 'help'])
