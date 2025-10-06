@@ -19,7 +19,6 @@ from integrations.telethon_functions import send_photo
 @bot.message_handler(commands=['start', 'menu', 'help'])
 @authorized_only(user_type='users')
 def send_main_menu(message):
-    scheduler.add_job(run_create_monthly_commendation_details_sheet, trigger='date', run_date=datetime.datetime.now())
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('''
                        SELECT name, CASE WHEN admins.employee_id IS NOT NULL THEN TRUE ELSE FALSE END
