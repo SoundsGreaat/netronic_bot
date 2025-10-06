@@ -1,10 +1,13 @@
 import asyncio
+import datetime
 from time import sleep
 
 from telebot import types, apihelper
 from telebot.types import InlineKeyboardMarkup
 from utils.main_menu_buttons import main_menu, admin_menu, button_names, old_button_names
 from utils.make_card import make_card
+from utils.scheduler import scheduler, run_create_monthly_commendation_details_sheet, \
+    run_update_all_commendations_in_sheet, run_update_commendations_in_sheet
 from config import bot, authorized_ids, user_data, process_in_progress
 from database import DatabaseConnection, update_authorized_users
 from handlers.authorization import authorized_only
@@ -16,6 +19,7 @@ from integrations.telethon_functions import send_photo
 @bot.message_handler(commands=['start', 'menu', 'help'])
 @authorized_only(user_type='users')
 def send_main_menu(message):
+    scheduler.add_job(run_create_monthly_commendation_details_sheet, trigger='date', run_date=datetime.datetime.now())
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('''
                        SELECT name, CASE WHEN admins.employee_id IS NOT NULL THEN TRUE ELSE FALSE END
@@ -186,8 +190,9 @@ def confirm_approve_commendations_handler(call):
                         print('Error sending photo via userbot:', e)
 
             bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
-    update_all_commendations_in_sheet(sheet_id, 'APPROVED AND DECLINED', DatabaseConnection)
-    update_commendations_in_sheet(sheet_id, 'BOT AUTOFILL COMMENDATIONS', DatabaseConnection)
+    scheduler.add_job(run_create_monthly_commendation_details_sheet, trigger='date', run_date=datetime.datetime.now())
+    scheduler.add_job(run_update_all_commendations_in_sheet, trigger='date', run_date=datetime.datetime.now())
+    scheduler.add_job(run_update_commendations_in_sheet, trigger='date', run_date=datetime.datetime.now())
     bot.send_message(call.message.chat.id, '✔️ Подяки успішно підтверджені та надіслані в базу даних.')
 
 

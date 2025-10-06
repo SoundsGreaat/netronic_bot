@@ -7,7 +7,8 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from config import BIRTHDAY_NOTIFICATIONS_USER_IDS, MONTH_DICT, bot
 from database import DatabaseConnection
 from integrations.google_api_functions import update_employees_in_sheet, update_bot_users_in_sheet, \
-    create_commendation_statistics_sheet
+    create_commendation_statistics_sheet, create_monthly_commendation_details_sheet, \
+    update_all_commendations_in_sheet, update_commendations_in_sheet
 from integrations.log_exporter import update_google_stats
 
 db_url = os.getenv('SCHEDULE_DATABASE_URL')
@@ -54,6 +55,20 @@ def run_update_google_stats():
 
 def run_create_commendation_statistics_sheet():
     create_commendation_statistics_sheet('1Z_K4FM9IfL65JT2RK84a3yifs291Wo2Dghwd-G3q-08', DatabaseConnection)
+
+
+def run_create_monthly_commendation_details_sheet():
+    create_monthly_commendation_details_sheet('1h8fIITZ03gOpuzO4qDnTYBzlSxXBUTUFXO6u2Q57jmw', DatabaseConnection)
+
+
+def run_update_all_commendations_in_sheet():
+    update_all_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I', 'APPROVED AND DECLINED',
+                                      DatabaseConnection)
+
+
+def run_update_commendations_in_sheet():
+    update_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I', 'BOT AUTOFILL COMMENDATIONS',
+                                  DatabaseConnection)
 
 
 def start_scheduler():

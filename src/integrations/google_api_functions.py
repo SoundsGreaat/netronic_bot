@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import date
+from datetime import date, datetime
 
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
@@ -248,8 +248,6 @@ def update_all_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnec
 
 
 def create_commendation_statistics_sheet(spreadsheet_id, DatabaseConnection):
-    from datetime import datetime
-
     creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
     creds = Credentials.from_service_account_info(creds_info,
                                                   scopes=['https://www.googleapis.com/auth/spreadsheets'])
@@ -304,6 +302,267 @@ def create_commendation_statistics_sheet(spreadsheet_id, DatabaseConnection):
     ).execute()
 
     print(f'Commendation statistics for {sheet_name} created/updated.')
+
+
+def create_monthly_commendation_details_sheet(spreadsheet_id, DatabaseConnection):
+    now = datetime.now()
+    month_ua = [
+        'Січень',
+        'Лютий',
+        'Березень',
+        'Квітень',
+        'Травень',
+        'Червень',
+        'Липень',
+        'Серпень',
+        'Вересень',
+        'Жовтень',
+        'Листопад',
+        'Грудень'
+    ][now.month - 1]
+
+    creds_info = json.loads(os.getenv('GOOGLE_API_CREDENTIALS'))
+    creds = Credentials.from_service_account_info(creds_info,
+                                                  scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    service = build('sheets', 'v4', credentials=creds)
+    sheet_name = f"{month_ua} {now.year}"
+    try:
+        add_sheet_request = {
+            'addSheet': {
+                'properties': {
+                    'title': sheet_name,
+                    'index': 0
+                }
+            }
+        }
+        response = service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={'requests': [add_sheet_request]}
+        ).execute()
+        sheet_id = response['replies'][0]['addSheet']['properties']['sheetId']
+
+        format_requests = [
+            {
+                'repeatCell': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'startRowIndex': 0,
+                        'endRowIndex': 2,
+                        'startColumnIndex': 0,
+                        'endColumnIndex': 5
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'wrapStrategy': 'WRAP'
+                        }
+                    },
+                    'fields': 'userEnteredFormat.wrapStrategy'
+                }
+            },
+            {
+                'repeatCell': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'startRowIndex': 0,
+                        'endRowIndex': 1,
+                        'startColumnIndex': 0,
+                        'endColumnIndex': 5
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'textFormat': {
+                                'bold': True,
+                                'fontSize': 12
+                            },
+                            'backgroundColor': {
+                                'red': 1.0,
+                                'green': 1.0,
+                                'blue': 0.0
+                            }
+                        }
+                    },
+                    'fields': 'userEnteredFormat.textFormat.bold,userEnteredFormat.textFormat.fontSize,userEnteredFormat.backgroundColor'
+                }
+            },
+            {
+                'repeatCell': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'startRowIndex': 1,
+                        'endRowIndex': 2,
+                        'startColumnIndex': 0,
+                        'endColumnIndex': 5
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'textFormat': {
+                                'bold': True
+                            },
+                            'backgroundColor': {
+                                'red': 0.643,
+                                'green': 0.761,
+                                'blue': 0.957
+                            }
+                        }
+                    },
+                    'fields': 'userEnteredFormat.textFormat.bold,userEnteredFormat.backgroundColor'
+                }
+            },
+            {
+                'mergeCells': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'startRowIndex': 0,
+                        'endRowIndex': 1,
+                        'startColumnIndex': 0,
+                        'endColumnIndex': 5
+                    },
+                    'mergeType': 'MERGE_ALL'
+                }
+            },
+            {
+                'repeatCell': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'startRowIndex': 0,
+                        'endRowIndex': 2,
+                        'startColumnIndex': 0,
+                        'endColumnIndex': 5
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'horizontalAlignment': 'CENTER',
+                            'verticalAlignment': 'MIDDLE'
+                        }
+                    },
+                    'fields': 'userEnteredFormat.horizontalAlignment,userEnteredFormat.verticalAlignment'
+                }
+            },
+            {
+                'updateDimensionProperties': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'dimension': 'COLUMNS',
+                        'startIndex': 0,
+                        'endIndex': 1
+                    },
+                    'properties': {
+                        'pixelSize': 120
+                    },
+                    'fields': 'pixelSize'
+                }
+            },
+            {
+                'updateDimensionProperties': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'dimension': 'COLUMNS',
+                        'startIndex': 1,
+                        'endIndex': 2
+                    },
+                    'properties': {
+                        'pixelSize': 420
+                    },
+                    'fields': 'pixelSize'
+                }
+            },
+            {
+                'updateDimensionProperties': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'dimension': 'COLUMNS',
+                        'startIndex': 2,
+                        'endIndex': 3
+                    },
+                    'properties': {
+                        'pixelSize': 420
+                    },
+                    'fields': 'pixelSize'
+                }
+            },
+            {
+                'updateDimensionProperties': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'dimension': 'COLUMNS',
+                        'startIndex': 3,
+                        'endIndex': 4
+                    },
+                    'properties': {
+                        'pixelSize': 230
+                    },
+                    'fields': 'pixelSize'
+                }
+            },
+            {
+                'updateDimensionProperties': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'dimension': 'COLUMNS',
+                        'startIndex': 4,
+                        'endIndex': 5
+                    },
+                    'properties': {
+                        'pixelSize': 600
+                    },
+                    'fields': 'pixelSize'
+                }
+            }
+        ]
+
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={'requests': format_requests}
+        ).execute()
+
+    except Exception as e:
+        if "already exists" not in str(e):
+            raise e
+        else:
+            sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+            for sheet in sheet_metadata.get('sheets', []):
+                if sheet['properties']['title'] == sheet_name:
+                    sheet_id = sheet['properties']['sheetId']
+                    break
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute(
+            '''
+            SELECT comm.commendation_date,
+                   e_from.name || '\n' || e_from.position,
+                   e_to.name || '\n' || e_to.position,
+                   value.name,
+                   comm.commendation_text
+            FROM commendations comm
+                     JOIN employees e_from ON comm.employee_from_id = e_from.id
+                     JOIN employees e_to ON comm.employee_to_id = e_to.id
+                     LEFT JOIN commendation_values value ON comm.value_id = value.id
+            WHERE EXTRACT(MONTH FROM comm.commendation_date) = %s
+            ORDER BY comm.id
+            ''',
+            (now.month,)
+        )
+        commendations_info = cursor.fetchall()
+
+    headers = [
+        [month_ua, '', '', '', ''],
+        ['Дата', 'Від кого подяка (ПІБ + посада)', 'Кому подяка (ПІБ + посада)', 'Цінність', 'Текст подяки']
+    ]
+    processed_info = [
+        [cell.strftime('%d/%m/%Y') if isinstance(cell, date) else (cell if cell is not None else ' ') for cell in row]
+        for row in commendations_info
+    ]
+    data = headers + processed_info
+    range_name = f'{sheet_name}!A:E'
+    body = {'values': data}
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=range_name,
+        valueInputOption='RAW',
+        body=body
+    ).execute()
+
+    print(f'Commendation statistics (detailed) for {sheet_name} created/updated.')
 
 
 def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection):
