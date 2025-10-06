@@ -7,10 +7,11 @@ from telebot import types, apihelper
 from config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_data, authorized_ids
 from database import DatabaseConnection, find_contact_by_name
 from handlers import authorized_only, thanks_menu
-from integrations.google_api_functions import update_commendations_in_sheet, update_all_commendations_in_sheet
 from integrations.telethon_functions import send_photo
 from utils.make_card import make_card, make_card_old
 from utils.main_menu_buttons import button_names
+from utils.scheduler import scheduler, run_update_commendations_in_sheet, \
+    run_create_monthly_commendation_details_sheet, run_update_all_commendations_in_sheet
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'show_thanks')
@@ -190,9 +191,8 @@ def confirm_delete_commendation(call):
         cursor.execute('DELETE FROM commendations WHERE id = %s', (commendation_id,))
         conn.commit()
 
-    update_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I',
-                                  'BOT AUTOFILL COMMENDATIONS',
-                                  DatabaseConnection)
+    scheduler.add_job(run_update_commendations_in_sheet, trigger='date', run_date=datetime.datetime.now())
+
     bot.delete_message(call.message.chat.id, call.message.message_id)
     print(f'Commendation {commendation_id} deleted by {call.from_user.username}.')
     bot.send_message(call.message.chat.id, '✅ Подяку видалено.')
@@ -364,8 +364,7 @@ def confirm_send_thanks(call):
         )
         conn.commit()
 
-    sheet_id = '15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I'
-    update_all_commendations_in_sheet(sheet_id, 'APPROVED AND DECLINED', DatabaseConnection)
+    scheduler.add_job(run_update_all_commendations_in_sheet, trigger='date', run_date=datetime.datetime.now())
 
     bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано на модерацію.'
                                                         '\nДякуємо за вашу залученість!')
@@ -579,9 +578,8 @@ def confirm_send_thanks(call):
 
         conn.commit()
 
-    update_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I',
-                                  'BOT AUTOFILL COMMENDATIONS',
-                                  DatabaseConnection)
+    scheduler.add_job(run_create_monthly_commendation_details_sheet, trigger='date', run_date=datetime.datetime.now())
+    scheduler.add_job(run_update_commendations_in_sheet, trigger='date', run_date=datetime.datetime.now())
 
     try:
         bot.send_photo(recipient_id, image, caption='📩 Вам було надіслано подяку.')
