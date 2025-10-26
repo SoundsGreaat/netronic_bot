@@ -457,40 +457,10 @@ def proceed_send_thanks(call):
     make_card_data[call.message.chat.id]['employee_name_basic'] = employee_name_basic
     make_card_data[call.message.chat.id]['employee_position'] = employee_position
     make_card_data[call.message.chat.id]['employee_telegram_id'] = employee_telegram_id
-    markup = types.InlineKeyboardMarkup(row_width=1)
-
-    with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT id, name FROM commendation_values')
-        values = cursor.fetchall()
-
-    for value in values:
-        value_id = value[0]
-        value_name = value[1]
-        btn = types.InlineKeyboardButton(text=f'{value_name}', callback_data=f'value_{value_id}')
-        markup.add(btn)
-    # TODO change template
-    # sent_message = bot.edit_message_text(
-    #     f'Виберіть цінність, якій відповідає подяка:',
-    #     call.message.chat.id, call.message.message_id, parse_mode='HTML', reply_markup=markup)
-    # make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
     sent_message = bot.edit_message_text(
         '📝 Введіть текст подяки (не більше 150 символів):',
         call.message.chat.id, call.message.message_id, parse_mode='HTML')
-    make_card_data[call.message.chat.id]['sent_message'] = sent_message
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('value_'))
-@authorized_only(user_type='moderators')
-def select_value(call):
-    value_id = int(call.data.split('_')[1])
-    make_card_data[call.message.chat.id]['value'] = value_id
-    employee_name_basic = make_card_data[call.message.chat.id]['employee_name_basic']
-
-    sent_message = bot.edit_message_text(
-        '📝 Введіть текст подяки:',
-        call.message.chat.id, call.message.message_id, parse_mode='HTML')
-
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
 

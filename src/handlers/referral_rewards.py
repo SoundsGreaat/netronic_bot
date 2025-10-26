@@ -213,26 +213,51 @@ def proceed_send_ref(call):
     make_card_data[call.message.chat.id]['employee_position'] = employee_position
     make_card_data[call.message.chat.id]['employee_telegram_id'] = employee_telegram_id
 
-    with DatabaseConnection() as (conn, cursor):
-        cursor.execute('SELECT name, position FROM employees WHERE telegram_user_id = %s',
-                       (call.message.chat.id,))
-        employee_from_name, employee_from_position = cursor.fetchone()
-
-    image = make_card_old(
-        make_card_data[call.message.chat.id]['employee_name_basic'],
-        make_card_data[call.message.chat.id]['employee_position'],
-        'Дякуємо, що додали нового потужного гравця до нашої команди!',
-        'Бонус за реферальною програмою',
-    )
-    make_card_data[call.message.chat.id]['image'] = image
-
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити', callback_data='confirm_send_ref')
-    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_ref')
-    markup.add(confirm_btn, cancel_btn)
-
-    sent_message = bot.send_photo(call.message.chat.id, image, caption='📝 Перевірте подяку:', reply_markup=markup)
+    sent_message = bot.edit_message_text(
+        '📝 Введіть текст подяки (не більше 150 символів):',
+        call.message.chat.id, call.message.message_id, parse_mode='HTML')
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'send_ref')
+@authorized_only(user_type='moderators')
+def send_ref_name(message, position_changed=False):
+    if len(message.text) >= 150:
+        bot.reply_to(message, '❗️ Текст подяки не може перевищувати 150 символів.')
+        return
+
+    data_filled = False
+
+    if not make_card_data[message.chat.id].get('thanks_text'):
+        make_card_data[message.chat.id]['thanks_text'] = message.text
+        sent_message = make_card_data[message.chat.id]['sent_message']
+        bot.delete_message(message.chat.id, message.message_id)
+        bot.delete_message(message.chat.id, sent_message.message_id)
+        data_filled = True
+
+    if data_filled or position_changed:
+        if data_filled or position_changed:
+            with DatabaseConnection() as (conn, cursor):
+                cursor.execute('SELECT name, position FROM employees WHERE telegram_user_id = %s',
+                               (message.chat.id,))
+                employee_from_name, employee_from_position = cursor.fetchone()
+
+        image = make_card_old(
+            make_card_data[message.chat.id]['employee_name_basic'],
+            make_card_data[message.chat.id]['employee_position'],
+            make_card_data[message.chat.id]['thanks_text'],
+            header_text='Бонус за реферальною програмою'
+        )
+        make_card_data[message.chat.id]['image'] = image
+
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        confirm_btn = types.InlineKeyboardButton(text='✅ Підтвердити', callback_data='confirm_send_ref')
+        cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
+        markup.add(confirm_btn, cancel_btn)
+
+        sent_message = bot.send_photo(message.chat.id, image, caption='📝 Перевірте подяку:', reply_markup=markup)
+        make_card_data[message.chat.id]['sent_message'] = sent_message
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'confirm_send_ref')
@@ -244,7 +269,7 @@ def confirm_send_ref(call):
     image = make_card_data[call.message.chat.id]['image']
 
     employee_id = make_card_data[call.message.chat.id]['employee_id']
-    ref_text = 'Дякуємо, що додали нового потужного гравця до нашої команди!'
+    ref_text = make_card_data[call.message.chat.id]['thanks_text']
     employee_position = make_card_data[call.message.chat.id]['employee_position']
     ref_date = datetime.datetime.now().date()
 
@@ -254,16 +279,12 @@ def confirm_send_ref(call):
 
         cursor.execute(
             'INSERT INTO referrals ('
-            'employee_to_id, employee_from_id, referral_date, position) '
-            'VALUES (%s, %s, %s, %s)',
-            (employee_id, sender_id, ref_date, employee_position)
+            'employee_to_id, employee_from_id, referral_date, position, referral_text) '
+            'VALUES (%s, %s, %s, %s, %s)',
+            (employee_id, sender_id, ref_date, employee_position, ref_text)
         )
 
         conn.commit()
-
-    # update_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I',
-    #                               'BOT AUTOFILL COMMENDATIONS',
-    #                               DatabaseConnection)
 
     try:
         bot.send_photo(recipient_id, image, caption='📩 Вам було надіслано подяку.')
