@@ -50,7 +50,7 @@ def add_employee_to_crm(name, phone, position, telegram_user_id, telegram_userna
             return employee_crm_id
         except AttributeError:
             print(f'Error {response.status_code}: {response.text}')
-            return
+            return None
     else:
         print(f'Error {response.status_code}: {response.text}')
         return None
