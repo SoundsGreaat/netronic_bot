@@ -382,6 +382,7 @@ def send_thanks_name_mod(message, position_changed=False):
 
         if make_card_data[message.chat.id].get('sender_name'):
             employee_from_name = make_card_data[message.chat.id]['sender_name']
+            employee_from_position = None
 
         image = make_card(
             make_card_data[message.chat.id]['employee_name_basic'],
