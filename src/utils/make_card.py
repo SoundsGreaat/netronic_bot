@@ -9,6 +9,9 @@ from config import COMMENDATION_TEMPLATE, FONT_EVOLVENTA, FONT_EVOLVENTA_BOLD, F
 
 
 def draw_text(draw, text, font_size, center_position, color=(0, 0, 0), bold=False, font='primary', max_width=1200):
+    if not text:
+        return
+
     from config import FONT_NOTO
 
     if font == 'primary':

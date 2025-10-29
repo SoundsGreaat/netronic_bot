@@ -137,16 +137,26 @@ def show_commendation(call):
     commendation_id = int(call.data.split('_')[1])
     with DatabaseConnection() as (conn, cursor):
         cursor.execute(
-            'SELECT e_to.name, commendations.position, commendation_text, commendation_date, e_from.name, values.name, '
-            'e_from.position '
-            'FROM commendations '
-            'JOIN employees e_to ON employee_to_id = e_to.id '
-            'JOIN employees e_from ON employee_from_id = e_from.id '
-            'LEFT JOIN commendation_values values ON commendations.value_id = values.id '
-            'WHERE commendations.id = %s', (commendation_id,)
+            '''
+            SELECT e_to.name,
+                   commendations.position,
+                   commendation_text,
+                   commendation_date,
+                   e_from.name,
+                   values.name,
+                   e_from.position,
+                   com_sender.sender_name
+            FROM commendations
+                     JOIN employees e_to ON employee_to_id = e_to.id
+                     JOIN employees e_from ON employee_from_id = e_from.id
+                     LEFT JOIN commendation_values values ON commendations.value_id = values.id
+                     LEFT JOIN commendation_senders com_sender ON commendations.id = com_sender.commendation_id
+            WHERE commendations.id = %s
+            ''',
+        (commendation_id,)
         )
         employee_name, employee_position, commendation_text, commendation_date, employee_from_name, \
-            value_name, employee_from_position = cursor.fetchone()
+            value_name, employee_from_position, sender_name = cursor.fetchone()
 
     formatted_date = commendation_date.strftime('%d.%m.%Y')
 
@@ -154,6 +164,10 @@ def show_commendation(call):
     if not value_name:
         image = make_card_old(employee_name, employee_position, commendation_text)
     else:
+        if sender_name:
+            employee_from_name = sender_name
+            employee_from_position = None
+
         image = make_card(employee_name, employee_position, commendation_text, value_name, employee_from_name,
                           employee_from_position)
 
@@ -200,7 +214,22 @@ def confirm_delete_commendation(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'send_commendation_mod')
 @authorized_only(user_type='users')
-def send_commendation_mod(call):
+def choose_sender(call):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    send_from_me_btn = types.InlineKeyboardButton(text='📩 Від мого імені', callback_data='thanks_from_me_mod')
+    send_from_other_btn = types.InlineKeyboardButton(text='📩 Від імені іншого співробітника',
+                                                     callback_data='thanks_from_other_mod')
+    markup.add(send_from_me_btn, send_from_other_btn)
+
+    sent_message = bot.edit_message_text('🔍 Оберіть варіант надсилання подяки:', call.message.chat.id,
+                                         call.message.message_id, reply_markup=markup)
+
+    make_card_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'thanks_from_me_mod')
+@authorized_only(user_type='users')
+def thanks_search(call):
     process_in_progress[call.message.chat.id] = 'thanks_search_mod'
 
     if make_card_data.get(call.message.chat.id):
@@ -209,10 +238,45 @@ def send_commendation_mod(call):
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
     markup = types.InlineKeyboardMarkup()
     markup.add(cancel_btn)
-    sent_message = bot.edit_message_text('📝 Введіть ім\'я співробітника для пошуку:',
+    sent_message = bot.edit_message_text('📝 Введіть ім\'я співробітника якому хочете надіслати подяку:',
                                          call.message.chat.id, call.message.message_id, reply_markup=markup)
     make_card_data[call.message.chat.id]['sent_message'] = sent_message
 
+
+@bot.callback_query_handler(func=lambda call: call.data == 'thanks_from_other_mod')
+@authorized_only(user_type='users')
+def thanks_send_sender(call):
+    process_in_progress[call.message.chat.id] = 'thanks_send_sender_mod'
+
+    if make_card_data.get(call.message.chat.id):
+        del make_card_data[call.message.chat.id]
+
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn)
+    sent_message = bot.edit_message_text('📝 Введіть ім\'я співробітника, від імені якого хочете надіслати подяку:',
+                                         call.message.chat.id, call.message.message_id, reply_markup=markup)
+    make_card_data[call.message.chat.id]['sent_message'] = sent_message
+
+
+@bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
+    message.chat.id) == 'thanks_send_sender_mod')
+@authorized_only(user_type='users')
+def thanks_send_sender_ans(message):
+    process_in_progress[message.chat.id] = 'thanks_search_mod'
+
+    sender_name = message.text
+    make_card_data[message.chat.id]['sender_name'] = sender_name
+    bot.delete_message(message.chat.id, message.message_id)
+    sent_message = make_card_data[message.chat.id]['sent_message']
+
+    cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати', callback_data='cancel_send_thanks')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_btn)
+
+    bot.edit_message_text(f'✅ Ім\'я відправника встановлено як: {sender_name}\n'
+                          f'📝 Введіть ім\'я співробітника якому хочете надіслати подяку:',
+                          message.chat.id, sent_message.message_id, reply_markup=markup)
 
 @bot.message_handler(func=lambda message: message.text not in button_names and process_in_progress.get(
     message.chat.id) == 'thanks_search_mod')
@@ -316,6 +380,9 @@ def send_thanks_name_mod(message, position_changed=False):
                            (make_card_data[message.chat.id]['value'],))
             value_name = cursor.fetchone()[0]
 
+        if make_card_data[message.chat.id].get('sender_name'):
+            employee_from_name = make_card_data[message.chat.id]['sender_name']
+
         image = make_card(
             make_card_data[message.chat.id]['employee_name_basic'],
             make_card_data[message.chat.id]['employee_position'],
@@ -359,10 +426,22 @@ def confirm_send_thanks(call):
             'INSERT INTO commendations_mod ('
             'employee_to_id, employee_from_id, commendation_text, commendation_date, position, '
             'value_id) '
-            'VALUES (%s, %s, %s, %s, %s, %s)',
+            'VALUES (%s, %s, %s, %s, %s, %s) RETURNING id',
             (employee_id, sender_id, commendation_text, commendation_date, employee_position, value_id)
         )
+        commendation_id = cursor.fetchone()[0]
         conn.commit()
+
+        if make_card_data[call.message.chat.id].get('sender_name'):
+            sender_name = make_card_data[call.message.chat.id]['sender_name']
+
+            cursor.execute(
+                'INSERT INTO commendation_senders_mod ('
+                'commendation_id, sender_name) '
+                'VALUES (%s, %s)',
+                (commendation_id, sender_name)
+            )
+            conn.commit()
 
     scheduler.add_job(run_update_all_commendations_in_sheet, trigger='date', run_date=datetime.datetime.now())
 

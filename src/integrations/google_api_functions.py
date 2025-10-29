@@ -589,9 +589,18 @@ def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection
 
     placeholders = ','.join(['%s'] * len(ids_to_approve))
     select_query = f'''
-        SELECT commendation_text, commendation_date, employee_to_id, employee_from_id, position, value_id
-        FROM commendations_mod
-        WHERE id IN ({placeholders}) AND deleted = FALSE
+        SELECT 
+            cm.id,
+            cm.commendation_text, 
+            cm.commendation_date, 
+            cm.employee_to_id, 
+            cm.employee_from_id, 
+            cm.position, 
+            cm.value_id,
+            csm.sender_name
+        FROM commendations_mod cm
+        LEFT JOIN commendation_senders_mod csm ON cm.id = csm.commendation_id
+        WHERE cm.id IN ({placeholders}) AND cm.deleted = FALSE
     '''
 
     with DatabaseConnection() as (conn, cursor):
@@ -601,14 +610,43 @@ def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection
         if not commendations_info:
             return False
 
-        insert_query = '''
-                       INSERT INTO commendations
-                       (commendation_text, commendation_date, employee_to_id, employee_from_id, position, value_id)
-                       VALUES (%s, %s, %s, %s, %s, %s) \
-                       '''
+        commendations_data = [
+            (row[1], row[2], row[3], row[4], row[5], row[6])
+            for row in commendations_info
+        ]
 
-        cursor.executemany(insert_query, commendations_info)
-        cursor.execute('UPDATE commendations_mod SET deleted = TRUE')
+        insert_commendation_query = '''
+                                    INSERT INTO commendations
+                                    (commendation_text, commendation_date, employee_to_id, employee_from_id, position, \
+                                     value_id)
+                                    VALUES (%s, %s, %s, %s, %s, %s)
+                                    RETURNING id \
+                                    '''
+
+        commendation_senders_data = []
+        for idx, commendation in enumerate(commendations_data):
+            cursor.execute(insert_commendation_query, commendation)
+            new_commendation_id = cursor.fetchone()[0]
+
+            sender_name = commendations_info[idx][7]
+            if sender_name:
+                commendation_senders_data.append((new_commendation_id, sender_name))
+
+        if commendation_senders_data:
+            insert_sender_query = '''
+                                  INSERT INTO commendation_senders
+                                      (commendation_id, sender_name)
+                                  VALUES (%s, %s) \
+                                  '''
+            cursor.executemany(insert_sender_query, commendation_senders_data)
+
+        update_query = f'''
+            UPDATE commendations_mod 
+            SET deleted = TRUE 
+            WHERE id IN ({placeholders})
+        '''
+        cursor.execute(update_query, ids_to_approve)
+
         conn.commit()
 
     sheet.values().clear(

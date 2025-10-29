@@ -163,17 +163,27 @@ def confirm_approve_commendations_handler(call):
                                   values.name,
                                   from_emp.name,
                                   from_emp.position,
-                                  to_emp.telegram_user_id
+                                  to_emp.telegram_user_id,
+                                  com_sender.sender_name
                            FROM commendations_mod
                                     JOIN employees to_emp ON commendations_mod.employee_to_id = to_emp.id
                                     JOIN employees from_emp ON commendations_mod.employee_from_id = from_emp.id
                                     JOIN commendation_values values ON commendations_mod.value_id = values.id
+                                    LEFT JOIN commendation_senders_mod com_sender ON commendations_mod.id = com_sender.commendation_id
                            WHERE commendations_mod.id = %s
                            ''', (id,))
             card_data = cursor.fetchone()
-            image = make_card(
-                card_data[0], card_data[1], card_data[2], card_data[3], card_data[4], card_data[5]
-            )
+
+            if com_sender := card_data[7]:
+                image = make_card(
+                    card_data[0], card_data[1], card_data[2], card_data[3], com_sender, None
+                )
+
+            else:
+                image = make_card(
+                    card_data[0], card_data[1], card_data[2], card_data[3], card_data[4], card_data[5]
+                )
+
             recipient_id = card_data[6]
 
             try:
