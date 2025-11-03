@@ -217,7 +217,7 @@ def confirm_delete_commendation(call):
 def choose_sender(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
     send_from_me_btn = types.InlineKeyboardButton(text='📩 Від мого імені', callback_data='thanks_from_me_mod')
-    send_from_other_btn = types.InlineKeyboardButton(text='📩 Від імені іншого співробітника',
+    send_from_other_btn = types.InlineKeyboardButton(text='📩 Від департаменту/іншого співробітника',
                                                      callback_data='thanks_from_other_mod')
     markup.add(send_from_me_btn, send_from_other_btn)
 
