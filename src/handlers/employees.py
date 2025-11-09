@@ -520,13 +520,17 @@ def swap_phone(call):
     with DatabaseConnection() as (conn, cursor):
         cursor.execute('SELECT phone, work_phone FROM employees WHERE id = %s', (employee_id,))
         phone, work_phone = cursor.fetchone()
-        cursor.execute('UPDATE employees SET phone = %s, work_phone = %s WHERE id = %s',
+        cursor.execute('UPDATE employees SET phone = %s, work_phone = %s WHERE id = %s RETURNING phone, work_phone',
                        (work_phone, phone, employee_id))
+        new_phone, new_work_phone = cursor.fetchone()
         conn.commit()
 
     print(f'Phones swapped for employee {employee_id} by {call.from_user.username}.')
 
-    bot.answer_callback_query(call.id, '✅ Телефони успішно поміняні місцями.')
+    bot.answer_callback_query(call.id, '✅ Телефони успішно поміняні місцями.\n '
+                                       f'Новий персональний телефон: {new_phone if new_phone else "Не вказано"}\n'
+                                       f'Новий робочий телефон: {new_work_phone if new_work_phone else "Не вказано"}',
+                              show_alert=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('show_keywords_'))
