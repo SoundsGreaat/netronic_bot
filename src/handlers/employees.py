@@ -271,7 +271,8 @@ def send_profile(call, call_data=None):
                                      emp.telegram_username,
                                      intermediate_departments.name,
                                      emp.email,
-                                     emp.date_of_birth
+                                     emp.date_of_birth,
+                                     emp.work_phone
                               FROM employees as emp
                                        JOIN sub_departments ON emp.sub_department_id = sub_departments.id
                                        JOIN departments ON sub_departments.department_id = departments.id
@@ -304,7 +305,8 @@ def send_profile(call, call_data=None):
                                   emp.telegram_username,
                                   intermediate_departments.name,
                                   emp.email,
-                                  emp.date_of_birth
+                                  emp.date_of_birth,
+                                  emp.work_phone
                            FROM employees AS emp
                                     LEFT JOIN sub_departments AS sd1 ON emp.sub_department_id = sd1.id
                                     LEFT JOIN departments AS d1 ON sd1.department_id = d1.id
@@ -330,6 +332,7 @@ def send_profile(call, call_data=None):
     employee_intermediate_department = employee_info[6]
     employee_email = employee_info[7]
     employee_date_of_birth = employee_info[8].strftime('%d/%m') if employee_info[8] else None
+    employee_work_phone = employee_info[9]
 
     office_string = f'\n<b>🏢 Офіс/служба</b>: {employee_intermediate_department}' if employee_intermediate_department \
         else ''
@@ -337,7 +340,9 @@ def send_profile(call, call_data=None):
     sub_department_string = f'\n<b>🗄️ Відділ</b>: {employee_sub_department}' if (
             employee_sub_department != 'Відобразити співробітників') else ''
 
-    phone_string = f'\n<b>📞 Телефон</b>: {employee_phone}' if employee_phone else f'\n<b>📞 Телефон</b>: Не вказано'
+    phone_string = f'\n<b>📞 Персональний телефон</b>: {employee_phone}' if employee_phone else f'\n<b>📞 Телефон</b>: Не вказано'
+    work_phone_string = f'\n<b>📞 Робочий телефон</b>: {employee_work_phone}' if employee_work_phone else \
+        f'\n<b>📞 Телефон</b>: Не вказано'
 
     username_string = f'\n<b>🆔 Юзернейм</b>: {employee_username}' \
         if employee_username else f'\n<b>🆔 Юзернейм</b>: Не вказано'
@@ -353,6 +358,7 @@ def send_profile(call, call_data=None):
                     f'{sub_department_string}'
                     f'\n<b>💼 Посада</b>: {employee_position}'
                     f'{phone_string}'
+                    f'{work_phone_string}'
                     f'{username_string}'
                     f'{email_string}'
                     f'{date_of_birth_string}')
@@ -372,7 +378,7 @@ def edit_employee(call):
         employee_id = int(employee_id)
 
         edit_name_btn_callback = f'e_name_s_{search_query}_{employee_id}'
-        edit_phone_btn_callback = f'e_phone_s_{search_query}_{employee_id}'
+        edit_phone_btn_callback = f'phone_s_{search_query}_{employee_id}'
         edit_position_btn_callback = f'e_pos_s_{search_query}_{employee_id}'
         edit_username_btn_callback = f'e_uname_s_{search_query}_{employee_id}'
         edit_email_btn_callback = f'e_email_s_{search_query}_{employee_id}'
@@ -387,7 +393,7 @@ def edit_employee(call):
          employee_id) = map(int, call.data.split('_')[2:])
         edit_name_btn_callback = (f'e_name_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                   f'{sub_department_id}_{employee_id}')
-        edit_phone_btn_callback = (f'e_phone_{additional_instance}_{department_id}_{intermediate_department_id}_'
+        edit_phone_btn_callback = (f'phone_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                    f'{sub_department_id}_{employee_id}')
         edit_position_btn_callback = (f'e_pos_{additional_instance}_{department_id}_{intermediate_department_id}_'
                                       f'{sub_department_id}_{employee_id}')
@@ -467,6 +473,60 @@ def new_member_handler(message):
                 cursor.execute('INSERT INTO telegram_chats (chat_id, chat_name) VALUES (%s, %s) ',
                                (message.chat.id, message.chat.title))
                 conn.commit()
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('phone_'))
+@authorized_only(user_type='admins')
+def phone_menu(call):
+    if call.data.startswith('phone_s'):
+        parts = call.data.split('_')
+        search_query = '_'.join(parts[2:-1])
+        employee_id = parts[-1]
+        employee_id = int(employee_id)
+        change_personal_btn_callback = f'e_personal_s_{search_query}_{employee_id}'
+        change_work_btn_callback = f'e_work_s_{search_query}_{employee_id}'
+        back_btn_callback = f'edit_emp_s_{search_query}_{employee_id}'
+    else:
+        (additional_instance, department_id, intermediate_department_id, sub_department_id,
+         employee_id) = map(int, call.data.split('_')[1:])
+        change_personal_btn_callback = (f'e_personal_{additional_instance}_{department_id}_'
+                                        f'{intermediate_department_id}_{sub_department_id}_{employee_id}')
+        change_work_btn_callback = (f'e_work_{additional_instance}_{department_id}_'
+                                    f'{intermediate_department_id}_{sub_department_id}_{employee_id}')
+        back_btn_callback = (f'edit_emp_{additional_instance}_{department_id}_{intermediate_department_id}_'
+                             f'{sub_department_id}_{employee_id}')
+
+    swap_phone_btn_callback = f'swap_phone_{employee_id}'
+
+    change_personal_btn = types.InlineKeyboardButton(text='📞 Змінити персональний телефон',
+                                                     callback_data=change_personal_btn_callback)
+    change_work_btn = types.InlineKeyboardButton(text='📞 Змінити робочий телефон',
+                                                 callback_data=change_work_btn_callback)
+    swap_phone_btn = types.InlineKeyboardButton(text='🔄 Поміняти телефони місцями',
+                                                callback_data=swap_phone_btn_callback)
+    back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(change_personal_btn, change_work_btn, swap_phone_btn, back_btn)
+
+    bot.edit_message_text('Виберіть дію з телефонами співробітника:', call.message.chat.id,
+                          call.message.message_id, reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('swap_phone_'))
+@authorized_only(user_type='admins')
+def swap_phone(call):
+    employee_id = int(call.data.split('_')[2])
+
+    with DatabaseConnection() as (conn, cursor):
+        cursor.execute('SELECT phone, work_phone FROM employees WHERE id = %s', (employee_id,))
+        phone, work_phone = cursor.fetchone()
+        cursor.execute('UPDATE employees SET phone = %s, work_phone = %s WHERE id = %s',
+                       (work_phone, phone, employee_id))
+        conn.commit()
+
+    print(f'Phones swapped for employee {employee_id} by {call.from_user.username}.')
+
+    bot.answer_callback_query(call.id, '✅ Телефони успішно поміняні місцями.')
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('show_keywords_'))
@@ -682,9 +742,12 @@ def proceed_edit_employee(call):
     if call.data.startswith('e_name'):
         edit_employee_data[call.from_user.id]['column'] = ('name', employee_id)
         message_text = f'✏️ Введіть нове ім\'я для контакту <b>{employee_name}</b>:'
-    elif call.data.startswith('e_phone'):
+    elif call.data.startswith('e_work'):
+        edit_employee_data[call.from_user.id]['column'] = ('work_phone', employee_id)
+        message_text = f'📞 Введіть новий робочий телефон для контакту <b>{employee_name}</b>:'
+    elif call.data.startswith('e_personal'):
         edit_employee_data[call.from_user.id]['column'] = ('phone', employee_id)
-        message_text = f'📞 Введіть новий телефон для контакту <b>{employee_name}</b>:'
+        message_text = f'📞 Введіть новий персональний телефон для контакту <b>{employee_name}</b>:'
     elif call.data.startswith('e_pos'):
         edit_employee_data[call.from_user.id]['column'] = ('position', employee_id)
         message_text = f'💼 Введіть нову посаду для контакту <b>{employee_name}</b>:'
@@ -740,8 +803,20 @@ def edit_employee_data_ans(message):
         clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', new_value))
         if clear_number:
             new_value = f'+38{clear_number.group(1)}'
-            result_message_text = f'✅ Номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
+            result_message_text = f'✅ Особистий номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
             log_text = f'Employee {employee_id} phone changed to {new_value} by {message.from_user.username}.'
+        else:
+            result_message_text = ('🚫 Номер телефону введено невірно.'
+                                   '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+            log_text = ''
+            finish_function = False
+
+    elif column == 'work_phone':
+        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', new_value))
+        if clear_number:
+            new_value = f'+38{clear_number.group(1)}'
+            result_message_text = f'✅ Робочий номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
+            log_text = f'Employee {employee_id} work phone changed to {new_value} by {message.from_user.username}.'
         else:
             result_message_text = ('🚫 Номер телефону введено невірно.'
                                    '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
