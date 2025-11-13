@@ -4,7 +4,7 @@ import os
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
-from config import BIRTHDAY_NOTIFICATIONS_USER_IDS, MONTH_DICT, bot
+from config import BIRTHDAY_NOTIFICATIONS_USER_IDS, MONTH_DICT, bot, TZ
 from database import DatabaseConnection
 from integrations.google_api_functions import update_employees_in_sheet, update_bot_users_in_sheet, \
     create_commendation_statistics_sheet, create_monthly_commendation_details_sheet, \
@@ -17,7 +17,7 @@ jobstores = {
     'default': SQLAlchemyJobStore(url=db_url)
 }
 
-scheduler = BackgroundScheduler(jobstores=jobstores, timezone='Europe/Kiev')
+scheduler = BackgroundScheduler(jobstores=jobstores, timezone=TZ)
 
 
 def send_birthday_notification():

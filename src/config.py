@@ -29,6 +29,8 @@ FERNET_KEY = os.environ.get('FERNET_KEY')
 
 COMMENDATIONS_PER_PAGE = 10
 
+TZ = os.environ.get('TZ', 'Europe/Kiev')
+
 MONTH_DICT = {
     1: 'Січень 🌨️',
     2: 'Лютий ❄️',
