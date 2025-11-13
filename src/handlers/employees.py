@@ -340,9 +340,10 @@ def send_profile(call, call_data=None):
     sub_department_string = f'\n<b>🗄️ Відділ</b>: {employee_sub_department}' if (
             employee_sub_department != 'Відобразити співробітників') else ''
 
-    phone_string = f'\n<b>📞 Персональний телефон</b>: {employee_phone}' if employee_phone else f'\n<b>📞 Телефон</b>: Не вказано'
+    phone_string = f'\n<b>📞 Особистий телефон</b>: {employee_phone}' if employee_phone else \
+        f'\n<b>📞 Особистий телефон</b>: Не вказано'
     work_phone_string = f'\n<b>📞 Робочий телефон</b>: {employee_work_phone}' if employee_work_phone else \
-        f'\n<b>📞 Телефон</b>: Не вказано'
+        f'\n<b>📞 Робочий телефон</b>: Не вказано'
 
     username_string = f'\n<b>🆔 Юзернейм</b>: {employee_username}' \
         if employee_username else f'\n<b>🆔 Юзернейм</b>: Не вказано'
@@ -498,7 +499,7 @@ def phone_menu(call):
 
     swap_phone_btn_callback = f'swap_phone_{employee_id}'
 
-    change_personal_btn = types.InlineKeyboardButton(text='📞 Змінити персональний телефон',
+    change_personal_btn = types.InlineKeyboardButton(text='📞 Змінити особистий телефон',
                                                      callback_data=change_personal_btn_callback)
     change_work_btn = types.InlineKeyboardButton(text='📞 Змінити робочий телефон',
                                                  callback_data=change_work_btn_callback)
@@ -528,7 +529,7 @@ def swap_phone(call):
     print(f'Phones swapped for employee {employee_id} by {call.from_user.username}.')
 
     bot.answer_callback_query(call.id, '✅ Телефони успішно поміняні місцями.\n '
-                                       f'Новий персональний телефон: {new_phone if new_phone else "Не вказано"}\n'
+                                       f'Новий особистий телефон: {new_phone if new_phone else "Не вказано"}\n'
                                        f'Новий робочий телефон: {new_work_phone if new_work_phone else "Не вказано"}',
                               show_alert=True)
 
@@ -751,7 +752,7 @@ def proceed_edit_employee(call):
         message_text = f'📞 Введіть новий робочий телефон для контакту <b>{employee_name}</b>:'
     elif call.data.startswith('e_personal'):
         edit_employee_data[call.from_user.id]['column'] = ('phone', employee_id)
-        message_text = f'📞 Введіть новий персональний телефон для контакту <b>{employee_name}</b>:'
+        message_text = f'📞 Введіть новий особистий телефон для контакту <b>{employee_name}</b>:'
     elif call.data.startswith('e_pos'):
         edit_employee_data[call.from_user.id]['column'] = ('position', employee_id)
         message_text = f'💼 Введіть нову посаду для контакту <b>{employee_name}</b>:'
