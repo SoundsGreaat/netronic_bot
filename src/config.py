@@ -83,6 +83,8 @@ make_card_data = defaultdict(dict)
 
 add_sub_department_data = defaultdict(dict)
 
+secret_santa_data = defaultdict(dict)
+
 process_in_progress = {}
 
 client = OpenAI()
