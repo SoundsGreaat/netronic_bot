@@ -4,7 +4,7 @@ import random
 from telebot import types, apihelper
 
 from config import bot, authorized_ids, process_in_progress, secret_santa_data
-from database import DatabaseConnection, update_authorized_users
+from database import DatabaseConnection
 from handlers import authorized_only
 from utils.main_menu_buttons import button_names
 from utils.scheduler import run_update_secret_santa_sheet, scheduler
