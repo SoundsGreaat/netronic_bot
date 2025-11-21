@@ -7,3 +7,5 @@
 /bot_session.session
 /.run/
 /src/userbot_session.session
+/src/bot_session.session
+/logs
