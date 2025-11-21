@@ -11,6 +11,7 @@ from handlers import authorized_only
 from integrations.crm_api_functions import add_employee_to_crm, delete_employee_from_crm, update_employee_in_crm
 from integrations.telethon_functions import proceed_find_user_id, remove_user_from_chat
 from utils.main_menu_buttons import button_names
+from utils.phone_validator import normalize_phone_number
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_employee_'))
@@ -66,16 +67,16 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
             skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_phone')
 
     elif not add_employee_data[message.chat.id].get('phone'):
-        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', message.text))
         message_text = '📧 Введіть email нового співробітника:'
         if skip_phone:
             add_employee_data[message.chat.id]['phone'] = 'skip'
         else:
-            if clear_number:
-                add_employee_data[message.chat.id]['phone'] = f'+38{clear_number.group(1)}'
+            normalized_phone = normalize_phone_number(message.text)
+            if normalized_phone:
+                add_employee_data[message.chat.id]['phone'] = normalized_phone
             else:
                 message_text = ('🚫 Номер телефону введено невірно.'
-                                '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+                                '\nВведіть номер телефону (для України можна без коду країни):')
         if add_employee_data[message.chat.id].get('phone'):
             skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_email')
 
@@ -805,26 +806,26 @@ def edit_employee_data_ans(message):
         log_text = f'Employee {employee_id} name changed to {new_value} by {message.from_user.username}.'
 
     elif column == 'phone':
-        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', new_value))
-        if clear_number:
-            new_value = f'+38{clear_number.group(1)}'
+        normalized_phone = normalize_phone_number(new_value)
+        if normalized_phone:
+            new_value = normalized_phone
             result_message_text = f'✅ Особистий номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
             log_text = f'Employee {employee_id} phone changed to {new_value} by {message.from_user.username}.'
         else:
             result_message_text = ('🚫 Номер телефону введено невірно.'
-                                   '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+                                   '\nВведіть номер телефону (для України можна без коду країни):')
             log_text = ''
             finish_function = False
 
     elif column == 'work_phone':
-        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', new_value))
-        if clear_number:
-            new_value = f'+38{clear_number.group(1)}'
+        normalized_phone = normalize_phone_number(new_value)
+        if normalized_phone:
+            new_value = normalized_phone
             result_message_text = f'✅ Робочий номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
             log_text = f'Employee {employee_id} work phone changed to {new_value} by {message.from_user.username}.'
         else:
             result_message_text = ('🚫 Номер телефону введено невірно.'
-                                   '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+                                   '\nВведіть номер телефону (для України можна без коду країни):')
             log_text = ''
             finish_function = False
 
