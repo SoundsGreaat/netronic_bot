@@ -1,16 +1,17 @@
 from .connection import DatabaseConnection
 from integrations.google_api_functions import update_employees_in_sheet
+from utils.logger import logger
 
 
 def test_connection():
     try:
         with DatabaseConnection():
-            print('Database connection established.')
-        print('Connection test complete.')
+            logger.info('Database connection established.')
+        logger.info('Connection test complete.')
         return True
 
     except Exception as e:
-        print(f'Error: {e}')
+        logger.error(f'Error: {e}')
         return False
 
 
@@ -35,9 +36,9 @@ def update_authorized_users(authorized_ids: dict):
 
         authorized_ids['moderators'] = {telegram_user_id[0] for telegram_user_id in cursor_result}
 
-        print(f'List of authorized users updated.'
-              f'\nAuthorized users: {authorized_ids["users"]}'
-              f'\nAuthorized admins: {authorized_ids["admins"]}')
+        logger.info(f'List of authorized users updated.'
+                    f'\nAuthorized users: {authorized_ids["users"]}'
+                    f'\nAuthorized admins: {authorized_ids["admins"]}')
 
 
 def find_contact_by_name(query):

@@ -4,6 +4,7 @@ from telebot import types, apihelper
 
 from database import DatabaseConnection
 from config import authorized_ids, bot, process_in_progress
+from utils.logger import logger
 
 
 def authorized_only(user_type):
@@ -18,7 +19,7 @@ def authorized_only(user_type):
                     or chat_id in authorized_ids['admins']):
                 func(data, *args, **kwargs)
                 log_user_action(chat_id, func.__name__)
-                print(f'User @{data.from_user.username} accessed {func.__name__}')
+                logger.info(f'User @{data.from_user.username} accessed {func.__name__}')
             else:
                 with DatabaseConnection() as (conn, cursor):
                     cursor.execute('''SELECT employees.telegram_username
@@ -33,7 +34,7 @@ def authorized_only(user_type):
                 except AttributeError:
                     chat_id = data.message.chat.id
 
-                print(
+                logger.warning(
                     f'Unauthorized user @{data.from_user.username} '
                     f'(chat id: {chat_id}) tried to access {func.__name__}')
                 bot.send_message(chat_id, f'Ви не авторизовані для використання цієї функції.'
@@ -64,7 +65,7 @@ def temp_authorize_user_by_contact(message):
                 f'User {new_user_id} temporarily authorized by @{message.from_user.username} without notification.'
                 f'\nTemporarily authorized users: {authorized_ids["temp_users"]}')
 
-        print(log_text)
+        logger.info(log_text)
 
         bot.send_message(message.chat.id, f'✅ Користувача <b>{message.contact.first_name}</b> авторизовано.',
                          parse_mode='HTML')

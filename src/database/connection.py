@@ -2,6 +2,7 @@ import psycopg2
 import select
 
 from config import DATABASE_URL
+from utils.logger import logger
 
 
 class DatabaseConnection:
@@ -46,7 +47,7 @@ class DatabaseListener:
         try:
             self.cursor.execute("SELECT 1;")
         except Exception as e:
-            print(f"Database ping failed: {e}")
+            logger.error(f"Database ping failed: {e}")
             raise
 
     def wait_for_notification(self, timeout=None):

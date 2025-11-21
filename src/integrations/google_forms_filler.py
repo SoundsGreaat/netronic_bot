@@ -12,6 +12,7 @@ from telebot import types
 
 from config import bot, user_data, process_in_progress
 from database import DatabaseConnection
+from utils.logger import logger
 from utils.messages import delete_messages
 
 
@@ -46,7 +47,7 @@ def main():
     form_url = os.getenv('FORM_URL')
     form_filler = FormFiller(form_url)
     form_filler.fill_form(form_filler.callback)
-    print('Form filled successfully')
+    logger.info('Form filled successfully')
 
 
 def callback(element, page_index, element_index, message):

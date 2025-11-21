@@ -6,6 +6,7 @@ from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 
 from config import authorized_ids, bot
+from utils.logger import logger
 
 
 def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
@@ -52,7 +53,7 @@ def update_employees_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
         body=body
     ).execute()
 
-    print(f'Data updated in sheet {sheet_name}')
+    logger.info(f'Data updated in sheet {sheet_name}')
 
 
 def update_bot_users_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
@@ -99,7 +100,7 @@ def update_bot_users_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
         body=body
     ).execute()
 
-    print(f'Data updated in sheet {sheet_name}')
+    logger.info(f'Data updated in sheet {sheet_name}')
 
 
 def update_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
@@ -146,7 +147,7 @@ def update_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection
         body=body
     ).execute()
 
-    print(f'Data updated in sheet {sheet_name}')
+    logger.info(f'Data updated in sheet {sheet_name}')
 
 
 def update_commendations_mod_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection, remove_all=False):
@@ -196,7 +197,7 @@ def update_commendations_mod_in_sheet(spreadsheet_id, sheet_name, DatabaseConnec
         body=body
     ).execute()
 
-    print(f'Data updated in sheet {sheet_name}')
+    logger.info(f'Data updated in sheet {sheet_name}')
 
 
 def update_all_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
@@ -244,7 +245,7 @@ def update_all_commendations_in_sheet(spreadsheet_id, sheet_name, DatabaseConnec
         body=body
     ).execute()
 
-    print(f'Data updated in sheet {sheet_name}')
+    logger.info(f'Data updated in sheet {sheet_name}')
 
 
 def create_commendation_statistics_sheet(spreadsheet_id, DatabaseConnection):
@@ -301,7 +302,7 @@ def create_commendation_statistics_sheet(spreadsheet_id, DatabaseConnection):
         body=body
     ).execute()
 
-    print(f'Commendation statistics for {sheet_name} created/updated.')
+    logger.info(f'Commendation statistics for {sheet_name} created/updated.')
 
 
 def create_monthly_commendation_details_sheet(spreadsheet_id, DatabaseConnection):
@@ -562,7 +563,7 @@ def create_monthly_commendation_details_sheet(spreadsheet_id, DatabaseConnection
         body=body
     ).execute()
 
-    print(f'Commendation statistics (detailed) for {sheet_name} created/updated.')
+    logger.info(f'Commendation statistics (detailed) for {sheet_name} created/updated.')
 
 
 def approve_and_parse_to_database(spreadsheet_id, sheet_name, DatabaseConnection):
@@ -676,7 +677,7 @@ def read_credentials_from_sheet(spreadsheet_id, sheet_name, telegram_username):
             break
 
     if user_row_index is None:
-        print(f'Username {telegram_username} not found.')
+        logger.warning(f'Username {telegram_username} not found.')
         return None
 
     columns = {
@@ -697,5 +698,5 @@ def read_credentials_from_sheet(spreadsheet_id, sheet_name, telegram_username):
         values = result.get('values', [])
         user_data[key] = values[0][0] if values else ''
 
-    print('Found user data:', user_data)
+    logger.info(f'Found user data for {telegram_username}')
     return user_data

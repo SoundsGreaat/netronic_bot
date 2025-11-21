@@ -3,6 +3,7 @@ import time
 
 from database import DatabaseListener, DatabaseConnection
 from integrations.google_api_functions import update_commendations_mod_in_sheet
+from utils.logger import logger
 
 
 def listen_for_notifications(channel, timeout=5, reconnect_delay=5):
@@ -23,7 +24,7 @@ def listen_for_notifications(channel, timeout=5, reconnect_delay=5):
                         listener.ping()
                         last_ping_time = time.time()
         except Exception as e:
-            print(f"Listener error: {e}. Reconnecting in {reconnect_delay} seconds...")
+            logger.error(f"Listener error: {e}. Reconnecting in {reconnect_delay} seconds...")
             time.sleep(reconnect_delay)
 
 
