@@ -392,6 +392,30 @@ def secret_santa_change_info_ans(message):
                        (new_info, employee_id))
         conn.commit()
 
+        cursor.execute('''
+                       SELECT info.secret_santa_id,
+                              info.address,
+                              info.request,
+                              info.aversions,
+                              info.phone,
+                              santa.telegram_user_id
+                       FROM secret_santa_info info
+                                LEFT JOIN employees santa ON info.secret_santa_id = santa.id
+                       WHERE employee_id = %s
+                       ''', (employee_id,))
+        secret_santa_id, address, request, aversions, phone, secret_santa_telegram_id = cursor.fetchone()
+
+    if secret_santa_id:
+        try:
+            bot.send_message(secret_santa_telegram_id, f'🎅 Отримувач вашого подарунка оновив інформацію!'
+                                                       f'\n\n🏠 Адреса отримання: <b>{address}</b>'
+                                                       f'\n\n🎁 Побажання: <b>{request}</b>'
+                                                       f'\n\n🚫 Небажане: <b>{aversions}</b>'
+                                                       f'\n\n📞 Телефон: <b>{phone}</b>',
+                             parse_mode='HTML')
+        except Exception as e:
+            logger.error(f'Error sending updated Secret Santa info to employee ID {secret_santa_telegram_id}: {e}')
+
     sent_message = secret_santa_data[message.chat.id]['sent_message']
     bot.delete_message(message.chat.id, message.message_id)
     bot.delete_message(message.chat.id, sent_message.message_id)
