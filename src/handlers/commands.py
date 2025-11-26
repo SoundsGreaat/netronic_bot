@@ -12,6 +12,8 @@ from handlers.authorization import authorized_only
 from integrations.google_api_functions import read_credentials_from_sheet, approve_and_parse_to_database
 from integrations.telethon_functions import send_photo
 from utils.main_menu_buttons import main_menu, admin_menu, button_names, old_button_names, secret_santa_menu
+from utils.logger import logger
+from utils.main_menu_buttons import main_menu, admin_menu, button_names, old_button_names
 from utils.make_card import make_card
 from utils.scheduler import scheduler, run_create_monthly_commendation_details_sheet, \
     run_update_all_commendations_in_sheet, run_update_commendations_in_sheet
@@ -121,7 +123,7 @@ def proceed_mass_message(message):
         try:
             bot.send_message(employee[0], message.text)
         except Exception as e:
-            print(e)
+            logger.error(f'Error sending mass message: {e}')
     bot.send_message(message.chat.id, '✔️ Повідомлення розіслано.')
     del process_in_progress[message.chat.id]
 
@@ -206,7 +208,7 @@ def confirm_approve_commendations_handler(call):
                     try:
                         asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.'))
                     except Exception as e:
-                        print('Error sending photo via userbot:', e)
+                        logger.error(f'Error sending photo via userbot: {e}')
 
             bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
     scheduler.add_job(run_create_monthly_commendation_details_sheet, trigger='date', run_date=datetime.datetime.now())

@@ -8,6 +8,7 @@ from config import bot, COMMENDATIONS_PER_PAGE, process_in_progress, make_card_d
 from database import DatabaseConnection, find_contact_by_name
 from handlers import authorized_only
 from integrations.telethon_functions import send_photo
+from utils.logger import logger
 from utils.make_card import make_card_old
 from utils.main_menu_buttons import button_names
 
@@ -148,7 +149,7 @@ def confirm_delete_ref(call):
     #                               'BOT AUTOFILL COMMENDATIONS',
     #                               DatabaseConnection)
     bot.delete_message(call.message.chat.id, call.message.message_id)
-    print(f'Referral record {ref_id} deleted by {call.from_user.username}.')
+    logger.info(f'Referral record {ref_id} deleted by {call.from_user.username}.')
     bot.send_message(call.message.chat.id, '✅ Запис про реферал видалено.')
 
 
@@ -291,11 +292,11 @@ def confirm_send_ref(call):
     except apihelper.ApiTelegramException as e:
         if e.error_code == 400 and "chat not found" in e.description:
             bot.send_message(call.message.chat.id, '🚫 Користувача не знайдено. Надсилаю подяку як юзербот.')
-            print('Sending image to user failed. Chat not found. Trying to send image as user.')
+            logger.warning('Sending image to user failed. Chat not found. Trying to send image as user.')
             try:
                 asyncio.run(send_photo(recipient_id, image, caption='📩 Вам надіслано подяку.'))
             except Exception as e:
-                print('Error sending photo via userbot:', e)
+                logger.error(f'Error sending photo via userbot: {e}')
 
     bot.send_photo(call.message.chat.id, image, caption='✅ Подяку надіслано.')
 

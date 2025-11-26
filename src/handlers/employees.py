@@ -10,7 +10,9 @@ from database import DatabaseConnection, update_authorized_users
 from handlers import authorized_only
 from integrations.crm_api_functions import add_employee_to_crm, delete_employee_from_crm, update_employee_in_crm
 from integrations.telethon_functions import proceed_find_user_id, remove_user_from_chat
+from utils.logger import logger
 from utils.main_menu_buttons import button_names
+from utils.phone_validator import normalize_phone_number
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_employee_'))
@@ -66,16 +68,16 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
             skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_phone')
 
     elif not add_employee_data[message.chat.id].get('phone'):
-        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', message.text))
         message_text = '📧 Введіть email нового співробітника:'
         if skip_phone:
             add_employee_data[message.chat.id]['phone'] = 'skip'
         else:
-            if clear_number:
-                add_employee_data[message.chat.id]['phone'] = f'+38{clear_number.group(1)}'
+            normalized_phone = normalize_phone_number(message.text)
+            if normalized_phone:
+                add_employee_data[message.chat.id]['phone'] = normalized_phone
             else:
                 message_text = ('🚫 Номер телефону введено невірно.'
-                                '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+                                '\nВведіть номер телефону (для України можна без коду країни):')
         if add_employee_data[message.chat.id].get('phone'):
             skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_email')
 
@@ -111,7 +113,7 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
                 return
 
             add_employee_data[message.chat.id]['date_of_birth'] = formatted_date
-            print(add_employee_data[message.chat.id]['date_of_birth'])
+            logger.info(f'Date of birth set: {add_employee_data[message.chat.id]["date_of_birth"]}')
         message_text = '🆔 Введіть юзернейм нового співробітника:'
         if add_employee_data[message.chat.id].get('date_of_birth'):
             skip_btn = types.InlineKeyboardButton(text='⏭️ Пропустити', callback_data='skip_username')
@@ -180,7 +182,7 @@ def proceed_add_employee_data(message, delete_user_message=True, skip_phone=Fals
         update_authorized_users(authorized_ids)
         finish_function = True
         log_text = f'Employee {employee_id} added by @{message.from_user.username}.'
-        print(log_text)
+        logger.info(log_text)
 
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',
                                             callback_data=f'sub_dep_{additional_instance}_{department_id}_'
@@ -526,7 +528,7 @@ def swap_phone(call):
         new_phone, new_work_phone = cursor.fetchone()
         conn.commit()
 
-    print(f'Phones swapped for employee {employee_id} by {call.from_user.username}.')
+    logger.info(f'Phones swapped for employee {employee_id} by {call.from_user.username}.')
 
     bot.answer_callback_query(call.id, '✅ Телефони успішно поміняні місцями.\n '
                                        f'Новий особистий телефон: {new_phone if new_phone else "Не вказано"}\n'
@@ -618,7 +620,7 @@ def proceed_add_keyword_data(message):
                            (employee_id, keyword.strip()))
         conn.commit()
 
-    print(f'Keywords "{message.text}" added to employee {employee_id} by {message.from_user.username}.')
+    logger.info(f'Keywords "{message.text}" added to employee {employee_id} by {message.from_user.username}.')
 
     markup = types.InlineKeyboardMarkup()
     back_btn = types.InlineKeyboardButton(text='🔙 Назад', callback_data=back_btn_callback)
@@ -684,7 +686,7 @@ def confirm_delete_keyword(call):
         keyword = cursor.fetchone()[0]
         conn.commit()
 
-    print(f'Keyword "{keyword}" deleted from employee {employee_id} by {call.from_user.username}.')
+    logger.info(f'Keyword "{keyword}" deleted from employee {employee_id} by {call.from_user.username}.')
 
     message_text = f'✅ Ключове слово <b>{keyword}</b> видалено.'
     markup = types.InlineKeyboardMarkup()
@@ -711,7 +713,7 @@ def make_admin(call):
             message_text = f'✅ Користувач {employee_id} тепер є адміністратором.'
             log_text = f'Employee {employee_id} added to admins by {call.from_user.username}.'
         conn.commit()
-    print(log_text)
+    logger.info(log_text)
     update_authorized_users(authorized_ids)
     bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_message(call.message.chat.id, message_text)
@@ -805,26 +807,26 @@ def edit_employee_data_ans(message):
         log_text = f'Employee {employee_id} name changed to {new_value} by {message.from_user.username}.'
 
     elif column == 'phone':
-        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', new_value))
-        if clear_number:
-            new_value = f'+38{clear_number.group(1)}'
+        normalized_phone = normalize_phone_number(new_value)
+        if normalized_phone:
+            new_value = normalized_phone
             result_message_text = f'✅ Особистий номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
             log_text = f'Employee {employee_id} phone changed to {new_value} by {message.from_user.username}.'
         else:
             result_message_text = ('🚫 Номер телефону введено невірно.'
-                                   '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+                                   '\nВведіть номер телефону (для України можна без коду країни):')
             log_text = ''
             finish_function = False
 
     elif column == 'work_phone':
-        clear_number = re.match(r'^3?8?(0\d{9})$', re.sub(r'\D', '', new_value))
-        if clear_number:
-            new_value = f'+38{clear_number.group(1)}'
+        normalized_phone = normalize_phone_number(new_value)
+        if normalized_phone:
+            new_value = normalized_phone
             result_message_text = f'✅ Робочий номер телефону контакту <b>{employee_name}</b> змінено на <b>{new_value}</b>.'
             log_text = f'Employee {employee_id} work phone changed to {new_value} by {message.from_user.username}.'
         else:
             result_message_text = ('🚫 Номер телефону введено невірно.'
-                                   '\nВведіть номер телефону в форматі 0XXXXXXXXX:')
+                                   '\nВведіть номер телефону (для України можна без коду країни):')
             log_text = ''
             finish_function = False
 
@@ -928,8 +930,8 @@ def edit_employee_data_ans(message):
             if column == 'telegram_username':
                 cursor.execute('UPDATE employees SET telegram_user_id = %s WHERE id = %s',
                                (telegram_user_id, employee_id))
-                print(f'Employee {employee_id} telegram_user_id changed to {telegram_user_id} by '
-                      f'{message.from_user.username}.')
+                logger.info(f'Employee {employee_id} telegram_user_id changed to {telegram_user_id} by '
+                            f'{message.from_user.username}.')
                 telegram_user_id_crm = telegram_user_id
             conn.commit()
 
@@ -944,7 +946,7 @@ def edit_employee_data_ans(message):
 
         del process_in_progress[message.chat.id]
         del edit_employee_data[message.chat.id]
-        print(log_text)
+        logger.info(log_text)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('del_dob_'))
@@ -964,7 +966,7 @@ def delete_date_of_birth(call):
     new_markup.add(back_button)
     bot.edit_message_text(f'✅ Дату народження контакту <b>{employee_name}</b> видалено.', call.message.chat.id,
                           call.message.message_id, parse_mode='HTML', reply_markup=new_markup)
-    print(f'Employee {employee_id} date of birth deleted by {call.from_user.username}.')
+    logger.info(f'Employee {employee_id} date of birth deleted by {call.from_user.username}.')
     del process_in_progress[call.message.chat.id]
     del edit_employee_data[call.from_user.id]
 
@@ -1031,7 +1033,7 @@ def confirm_delete_employee(call):
 
     delete_employee_from_crm(crm_id)
 
-    print(f'Employee {employee_name} deleted by {call.from_user.username}.')
+    logger.info(f'Employee {employee_name} deleted by {call.from_user.username}.')
     update_authorized_users(authorized_ids)
 
     successful_chats = []
@@ -1040,7 +1042,7 @@ def confirm_delete_employee(call):
         try:
             remove_user_from_chat(bot, chat_id, telegram_user_id)
         except Exception as e:
-            print(f'Error while removing user from chat: {e}')
+            logger.error(f'Error while removing user from chat: {e}')
             continue
         successful_chats.append(chat_name)
 

@@ -4,6 +4,7 @@ import pandas as pd
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 from database import DatabaseConnection
+from utils.logger import logger
 
 
 def write_to_sheet(service, spreadsheet_id, sheet_name, df):
@@ -25,7 +26,7 @@ def write_to_sheet(service, spreadsheet_id, sheet_name, df):
         valueInputOption="RAW",
         body=body
     ).execute()
-    print(f"Updated sheet: {sheet_name}")
+    logger.info(f"Updated sheet: {sheet_name}")
 
 
 def update_google_stats(spreadsheet_id):

@@ -8,6 +8,7 @@ from database import DatabaseConnection
 from handlers import authorized_only
 from integrations.crm_api_functions import get_employee_pass_from_crm
 from integrations.google_forms_filler import send_question_form
+from utils.logger import logger
 from utils.main_menu_buttons import button_names
 from utils.messages import send_links
 
@@ -60,7 +61,7 @@ def proceed_add_link_data(message):
                 conn.commit()
             message_text = f'✅ Посилання <b>{add_link_data[message.chat.id]["name"]}</b> успішно додано.'
             log_text = f'Link {link_id} added by @{message.from_user.username}.'
-            print(log_text)
+            logger.info(log_text)
             finish_function = True
 
     cancel_btn = types.InlineKeyboardButton(text='❌ Скасувати',

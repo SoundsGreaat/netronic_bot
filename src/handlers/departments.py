@@ -5,6 +5,7 @@ from config import bot, process_in_progress, user_data, add_director_data, autho
     add_sub_department_data
 from database import DatabaseConnection, find_contact_by_name
 from handlers import authorized_only
+from utils.logger import logger
 from utils.main_menu_buttons import button_names
 from utils.messages import delete_messages
 
@@ -340,10 +341,8 @@ def manage_additional_departments(call):
     if edit_message:
         bot.edit_message_text(message_text, call.message.chat.id, call.message.message_id,
                               reply_markup=markup)
-        print(1)
     else:
         bot.send_message(call.message.chat.id, message_text, reply_markup=markup)
-        print(2)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('manage_subdep_'))
@@ -448,4 +447,4 @@ def delete_sub_department(call):
         conn.commit()
     call.data = f'manage_add_{employee_id}_{True}'
     manage_additional_departments(call)
-    print(f'Employee {call.from_user.username} deleted additional sub_department {add_sub_department_id}.')
+    logger.info(f'Employee {call.from_user.username} deleted additional sub_department {add_sub_department_id}.')

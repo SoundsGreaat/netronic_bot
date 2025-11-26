@@ -8,6 +8,8 @@ from cryptography.fernet import Fernet
 from telethon import functions
 from telethon.sync import TelegramClient
 
+from utils.logger import logger
+
 api_id = int(os.environ.get('TELETHON_API_ID'))
 api_hash = os.environ.get('TELETHON_API_HASH')
 api_id_userbot = int(os.environ.get('TELETHON_API_ID_USERBOT'))
@@ -28,7 +30,7 @@ def decrypt_session(key, input_file, output_file):
 async def proceed_find_user_id(username):
     client = TelegramClient('bot_session', api_id, api_hash)
     await client.start(bot_token=token)
-    print(await client.get_me())
+    logger.info(f'Bot client connected: {await client.get_me()}')
     try:
         async with client:
             user = await client.get_entity(username)
@@ -66,7 +68,7 @@ async def send_photo(user_id, image, caption):
         temp.write(image_bytes)
         temp.seek(0)
         image_path = temp.name
-        print(f'Temp file saved as {image_path}')
+        logger.debug(f'Temp file saved as {image_path}')
 
     try:
         async with client:
