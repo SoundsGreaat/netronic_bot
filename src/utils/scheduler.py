@@ -8,7 +8,7 @@ from config import BIRTHDAY_NOTIFICATIONS_USER_IDS, MONTH_DICT, bot, TZ
 from database import DatabaseConnection
 from integrations.google_api_functions import update_employees_in_sheet, update_bot_users_in_sheet, \
     create_commendation_statistics_sheet, create_monthly_commendation_details_sheet, \
-    update_all_commendations_in_sheet, update_commendations_in_sheet
+    update_all_commendations_in_sheet, update_commendations_in_sheet, update_secret_santa_sheet
 from integrations.log_exporter import update_google_stats
 
 db_url = os.getenv('SCHEDULE_DATABASE_URL')
@@ -69,6 +69,11 @@ def run_update_all_commendations_in_sheet():
 def run_update_commendations_in_sheet():
     update_commendations_in_sheet('15_V8Z7fW-KP56dwpqbe0osjlJpldm6R5-bnUoBEgM1I', 'BOT AUTOFILL COMMENDATIONS',
                                   DatabaseConnection)
+
+
+def run_update_secret_santa_sheet():
+    update_secret_santa_sheet('1C006CxIbSVE82PV0J6tiJLIbKyYtIMZ3jbmMMTlNhT8', 'SECRET SANTA PARTICIPANTS',
+                              DatabaseConnection)
 
 
 def start_scheduler():

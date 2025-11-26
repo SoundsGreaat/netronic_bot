@@ -4,12 +4,14 @@ from time import sleep
 
 from telebot import types, apihelper
 from telebot.types import InlineKeyboardMarkup
+from telebot.util import user_link
 
 from config import bot, authorized_ids, user_data, process_in_progress
 from database import DatabaseConnection, update_authorized_users
 from handlers.authorization import authorized_only
 from integrations.google_api_functions import read_credentials_from_sheet, approve_and_parse_to_database
 from integrations.telethon_functions import send_photo
+from utils.main_menu_buttons import main_menu, admin_menu, button_names, old_button_names, secret_santa_menu
 from utils.logger import logger
 from utils.main_menu_buttons import main_menu, admin_menu, button_names, old_button_names
 from utils.make_card import make_card
@@ -30,15 +32,23 @@ def send_main_menu(message):
         employee_name, is_admin = cursor.fetchone()
         user_first_name = f' {employee_name[0].split()[1]}' if employee_name and len(
             employee_name[0].split()) >= 2 else ''
-    menu = admin_menu if is_admin else main_menu
+        cursor.execute(
+            'SELECT EXISTS (SELECT 1 FROM secret_santa_phases WHERE phase_number IN (1, 2) AND is_started = TRUE)')
+        secret_santa_started = cursor.fetchone()[0]
+    if is_admin:
+        user_reply_markup = admin_menu
+    elif secret_santa_started:
+        user_reply_markup = secret_santa_menu
+    else:
+        user_reply_markup = main_menu
     with open('../assets/images/netronic_logo.png', 'rb') as photo:
         bot.send_photo(message.chat.id, photo,
                        caption=f'👋 Привіт<b>{user_first_name}</b>! Я твій особистий бот-помічник в компанії '
                                f'<b>Netronic</b>.'
                                f'\nЩо тебе цікавить?',
-                       reply_markup=menu, parse_mode='HTML')
+                       reply_markup=user_reply_markup, parse_mode='HTML')
 
-    if message.chat.id in authorized_ids['admins']:
+    if is_admin:
         bot.send_message(message.chat.id, '🔐 Ви авторизовані як адміністратор.'
                                           '\nВам доступні додаткові команди:'
                                           '\n\n/update_authorized_users - оновити список авторизованих користувачів'
@@ -170,7 +180,8 @@ def confirm_approve_commendations_handler(call):
                                     JOIN employees to_emp ON commendations_mod.employee_to_id = to_emp.id
                                     JOIN employees from_emp ON commendations_mod.employee_from_id = from_emp.id
                                     JOIN commendation_values values ON commendations_mod.value_id = values.id
-                                    LEFT JOIN commendation_senders_mod com_sender ON commendations_mod.id = com_sender.commendation_id
+                                    LEFT JOIN commendation_senders_mod com_sender
+                                              ON commendations_mod.id = com_sender.commendation_id
                            WHERE commendations_mod.id = %s
                            ''', (id,))
             card_data = cursor.fetchone()

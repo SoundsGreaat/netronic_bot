@@ -30,4 +30,4 @@ from .commendations import show_thanks, show_my_thanks, show_thanks_period, show
 
 from .ai import ai_question, proceed_ai_question, cancel_ai_question
 
-from . import awards, referral_rewards
+from . import awards, referral_rewards, secret_santa
