@@ -6,6 +6,7 @@ from telebot import types, apihelper
 from config import bot, authorized_ids, process_in_progress, secret_santa_data
 from database import DatabaseConnection
 from handlers import authorized_only
+from utils.logger import logger
 from utils.main_menu_buttons import button_names
 from utils.scheduler import run_update_secret_santa_sheet, scheduler
 from utils.secret_santa_reminder import secret_santa_notification_wrapper
@@ -136,7 +137,7 @@ def start_phase_2(call):
                                                            f'\n\n📞 Телефон: <b>{phone}</b>',
                                  parse_mode='HTML')
             except Exception as e:
-                print(f'Error while sending message to {secret_santa_telegram_id}: {e}')
+                logger.error(f'Error sending Secret Santa assignment to employee ID {secret_santa_telegram_id}: {e}')
         bot.delete_message(call.message.chat.id, sent_message.message_id)
 
 
@@ -206,7 +207,7 @@ def notify_users(call):
                                       '\nТи готовий?'
                                       '\nНатисни 👉 /start і приймай участь у грі!')
         except apihelper.ApiTelegramException:
-            print(f'Error while sending message to {user[0]}.')
+            logger.warning(f'Cannot send Secret Santa start notification to user ID {user[0]}: chat not found.')
 
     bot.delete_message(call.message.chat.id, call.message.message_id)
 

@@ -750,4 +750,4 @@ def update_secret_santa_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
         body=body
     ).execute()
 
-    print(f'Data updated in sheet {sheet_name}')
+    logger.info('Secret Santa data updated in sheet.')
