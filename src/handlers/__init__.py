@@ -3,7 +3,7 @@ from .authorization import authorized_only, temp_authorize_user_by_contact
 from .birthdays import send_birthdays_month, back_to_birthdays
 
 from .commands import send_main_menu, proceed_authorize_users, toggle_admin_mode, temp_authorize_user, \
-    send_mass_message, remind_password, proceed_mass_message, old_button_handler
+    send_mass_message, remind_password, proceed_mass_message
 
 from .departments import send_departments, send_inter_department_contacts, send_department_contacts, add_director, \
     proceed_add_director, send_sub_departments_contacts, send_search_form, proceed_contact_search, \
