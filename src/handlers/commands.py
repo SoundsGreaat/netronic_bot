@@ -127,13 +127,13 @@ def proceed_mass_message(message):
     bot.send_message(message.chat.id, '✔️ Повідомлення розіслано.')
     del process_in_progress[message.chat.id]
 
-
-@bot.message_handler(func=lambda message: message.text in old_button_names)
-@authorized_only(user_type='users')
-def old_button_handler(message):
-    bot.send_message(message.chat.id, 'Ця кнопка була видалена або замінена.'
-                                      '\nБудь ласка, скористайтесь меню нижче.',
-                     reply_markup=main_menu)
+# TODO Temporarily disabled old button handler
+# @bot.message_handler(func=lambda message: message.text in old_button_names)
+# @authorized_only(user_type='users')
+# def old_button_handler(message):
+#     bot.send_message(message.chat.id, 'Ця кнопка була видалена або замінена.'
+#                                       '\nБудь ласка, скористайтесь меню нижче.',
+#                      reply_markup=main_menu)
 
 
 @bot.message_handler(commands=['approve_commendations'])
