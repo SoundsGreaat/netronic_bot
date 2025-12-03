@@ -729,8 +729,8 @@ def update_secret_santa_sheet(spreadsheet_id, sheet_name, DatabaseConnection):
         cursor.execute(
             'SELECT receiver.name, giver.name, ssi.address, ssi.phone, ssi.request, ssi.aversions '
             'FROM secret_santa_info ssi '
-            'JOIN employees receiver ON ssi.employee_id = receiver.id '
-            'JOIN employees giver ON ssi.secret_santa_id = giver.id '
+            'LEFT JOIN employees receiver ON ssi.employee_id = receiver.id '
+            'LEFT JOIN employees giver ON ssi.secret_santa_id = giver.id '
             'ORDER BY receiver.name'
         )
         employees_info = cursor.fetchall()
